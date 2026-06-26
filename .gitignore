@@ -14,6 +14,6 @@ wheels/
 .ruff_cache/
 .idea/
 .vscode/
-db.sqlite3
+*.db
 .env
 *.pyc
