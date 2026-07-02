@@ -117,3 +117,47 @@ async def get_tasks(
     tasks = session.execute(paginated_tasks).scalars().all()
 
     return tasks
+
+
+@router.get(
+    "/{task_id}/",
+    response_model=TaskRead,
+    status_code=status.HTTP_200_OK,
+)
+async def get_task(
+    workspace_id: int,
+    task_id: int,
+    session: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace_stmt = select(
+        Workspace,
+    ).join(
+        WorkspaceMember,
+        WorkspaceMember.workspace_id == Workspace.id,
+    ).where(
+        Workspace.id == workspace_id,
+        WorkspaceMember.user_id == current_user.id,
+    )
+
+    workspace = session.execute(workspace_stmt).scalars().one_or_none()
+    if workspace is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not found",
+        )
+
+    task_stmt = select(
+        Task,
+    ).where(
+        Task.workspace_id == workspace_id,
+        Task.id == task_id,
+    )
+    task = session.execute(task_stmt).scalars().one_or_none()
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found",
+        )
+
+    return task
