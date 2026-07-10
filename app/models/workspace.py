@@ -1,10 +1,16 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql.functions import func
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.task import Task
 
 
 class Workspace(Base):
@@ -25,4 +31,11 @@ class Workspace(Base):
     updated_at: Mapped[datetime] = mapped_column(
         default=func.now(),
         onupdate=func.now(),
+    )
+
+    tasks: Mapped[list["Task"]] = relationship(
+        "Task",
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )

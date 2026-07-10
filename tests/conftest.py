@@ -9,7 +9,7 @@ from app.core.security import get_password_hash
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models import User, Workspace
+from app.models import User, Workspace, Task, WorkspaceMember
 
 
 @pytest.fixture
@@ -170,3 +170,97 @@ def second_user_workspace(
     workspace_response_data = create_workspace_response.json()
     workspace = test_session.get(Workspace, workspace_response_data["id"])
     return workspace
+
+
+@pytest.fixture
+def first_user_workspace_first_task(
+    test_session,
+    test_db_client,
+    first_user,
+    authorize_first_user,
+    first_user_workspace,
+):
+    create_task_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/",
+        headers=authorize_first_user,
+        json={
+            "title": "first test task",
+            "description": "first task description",
+            "assignee_id": first_user.id,
+        },
+    )
+
+    assert create_task_response.status_code == status.HTTP_201_CREATED
+
+    task_data = create_task_response.json()
+
+    task_obj = test_session.get(Task, task_data["id"])
+    return task_obj
+
+
+@pytest.fixture
+def first_user_workspace_second_task(
+    test_session,
+    test_db_client,
+    authorize_first_user,
+    first_user_workspace,
+):
+    create_task_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/",
+        headers=authorize_first_user,
+        json={
+            "title": "second test task",
+            "description": "second task description",
+        },
+    )
+
+    assert create_task_response.status_code == status.HTTP_201_CREATED
+
+    task_data = create_task_response.json()
+
+    task_obj = test_session.get(Task, task_data["id"])
+    return task_obj
+
+
+@pytest.fixture
+def second_user_workspace_first_task(
+    test_session,
+    test_db_client,
+    second_user,
+    authorize_second_user,
+    second_user_workspace,
+):
+    create_task_response = test_db_client.post(
+        f"/api/v1/workspaces/{second_user_workspace.id}/tasks/",
+        headers=authorize_second_user,
+        json={
+            "title": "first test task for second user workspace",
+            "description": "first task description for second user worskspace",
+            "assignee_id": second_user.id,
+        },
+    )
+
+    assert create_task_response.status_code == status.HTTP_201_CREATED
+
+    task_data = create_task_response.json()
+
+    task_obj = test_session.get(Task, task_data["id"])
+    return task_obj
+
+
+@pytest.fixture()
+def add_workspace_member(test_session):
+    def _add_workspace_member(workspace, user, role: str = "member"):
+        workspace_member = WorkspaceMember(
+            workspace_id=workspace.id,
+            user_id=user.id,
+            role=role,
+        )
+
+        test_session.add(workspace_member)
+        test_session.commit()
+        test_session.refresh(workspace_member)
+
+        return workspace_member
+
+    return _add_workspace_member
