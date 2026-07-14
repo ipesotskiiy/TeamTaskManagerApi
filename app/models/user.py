@@ -14,6 +14,8 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.task import Task
+    from app.models.task_comment import TaskComment
+    from app.models.task_activity import TaskActivity
 
 
 class User(Base):
@@ -39,4 +41,12 @@ class User(Base):
         "Task",
         back_populates="assignee",
         foreign_keys="[Task.assignee_id]",
+    )
+    task_comments: Mapped[list["TaskComment"]] = relationship(
+        "TaskComment",
+        back_populates="author",
+    )
+    task_activities: Mapped[list["TaskActivity"]] = relationship(
+        "TaskActivity",
+        back_populates="actor",
     )

@@ -1,6 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy import Enum, ForeignKey, UniqueConstraint
+from sqlalchemy import (
+    Enum,
+    ForeignKey,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql.functions import func
 

@@ -4,13 +4,19 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import (
+    Mapped,
+    mapped_column,
+    relationship,
+)
 from sqlalchemy.sql.functions import func
 
 from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.task import Task
+    from app.models.task_comment import TaskComment
+    from app.models.task_activity import TaskActivity
 
 
 class Workspace(Base):
@@ -37,5 +43,17 @@ class Workspace(Base):
         "Task",
         back_populates="workspace",
         cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    task_comments: Mapped[list["TaskComment"]] = relationship(
+        "TaskComment",
+        back_populates="workspace",
+        cascade="all, delete",
+        passive_deletes=True,
+    )
+    task_activities: Mapped[list["TaskActivity"]] = relationship(
+        "TaskActivity",
+        back_populates="workspace",
+        cascade="all, delete",
         passive_deletes=True,
     )
