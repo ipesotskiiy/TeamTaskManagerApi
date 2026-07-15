@@ -17,7 +17,11 @@ from app.models import (
     Task,
     TaskComment,
 )
-from app.schemas.task_comment import TaskCommentRead, TaskCommentCreate, TaskCommentUpdate
+from app.schemas.task_comment import (
+    TaskCommentRead,
+    TaskCommentCreate,
+    TaskCommentUpdate,
+)
 
 router = APIRouter(prefix="/comments", tags=["comments"])
 
@@ -214,7 +218,6 @@ async def get_task_comment(
         )
 
     return task_comment
-
 
 
 @router.patch(
