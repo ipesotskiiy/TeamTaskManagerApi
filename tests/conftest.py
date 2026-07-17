@@ -9,7 +9,7 @@ from app.core.security import get_password_hash
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models import User, Workspace, Task, WorkspaceMember, TaskComment
+from app.models import User, Workspace, Task, WorkspaceMember, TaskComment, TaskActivity
 
 
 @pytest.fixture
@@ -348,3 +348,83 @@ def second_user_first_workspace_first_task_first_comment(
     create_comment_response_data = create_comment_response.json()
     task_comment = test_session.get(TaskComment, create_comment_response_data["id"])
     return task_comment
+
+
+@pytest.fixture
+def first_user_first_workspace_first_task_first_activity(
+        test_session,
+        first_user,
+        first_user_workspace,
+        first_user_workspace_first_task,
+):
+    task_activity = TaskActivity(
+        task_id=first_user_workspace_first_task.id,
+        workspace_id=first_user_workspace.id,
+        actor_id=first_user.id,
+        event_type="created",
+
+    )
+    test_session.add(task_activity)
+    test_session.commit()
+    test_session.refresh(task_activity)
+    return task_activity
+
+
+@pytest.fixture
+def first_user_first_workspace_first_task_second_activity(
+        test_session,
+        first_user,
+        first_user_workspace,
+        first_user_workspace_first_task,
+):
+    task_activity = TaskActivity(
+        task_id=first_user_workspace_first_task.id,
+        workspace_id=first_user_workspace.id,
+        actor_id=first_user.id,
+        event_type="status_changed",
+
+    )
+    test_session.add(task_activity)
+    test_session.commit()
+    test_session.refresh(task_activity)
+    return task_activity
+
+
+@pytest.fixture
+def first_user_first_workspace_second_task_first_activity(
+        test_session,
+        first_user,
+        first_user_workspace,
+        first_user_workspace_second_task,
+):
+    task_activity = TaskActivity(
+        task_id=first_user_workspace_second_task.id,
+        workspace_id=first_user_workspace.id,
+        actor_id=first_user.id,
+        event_type="created",
+
+    )
+    test_session.add(task_activity)
+    test_session.commit()
+    test_session.refresh(task_activity)
+    return task_activity
+
+
+@pytest.fixture
+def second_user_first_workspace_first_task_first_activity(
+        test_session,
+        second_user,
+        second_user_workspace,
+        second_user_workspace_first_task,
+):
+    task_activity = TaskActivity(
+        task_id=second_user_workspace_first_task.id,
+        workspace_id=second_user_workspace.id,
+        actor_id=second_user.id,
+        event_type="created",
+
+    )
+    test_session.add(task_activity)
+    test_session.commit()
+    test_session.refresh(task_activity)
+    return task_activity

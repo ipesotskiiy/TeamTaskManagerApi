@@ -5,6 +5,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.workspaces import router as workspace_router
 from app.api.v1.tasks import router as task_router
 from app.api.v1.task_comments import router as task_comment_router
+from app.api.v1.task_activity import router as task_activities_router
 
 
 api_router = APIRouter()
@@ -14,6 +15,10 @@ api_router.include_router(workspace_router)
 api_router.include_router(task_router, prefix="/workspaces/{workspace_id}")
 api_router.include_router(
     task_comment_router,
+    prefix="/workspaces/{workspace_id}/tasks/{task_id}",
+)
+api_router.include_router(
+    task_activities_router,
     prefix="/workspaces/{workspace_id}/tasks/{task_id}",
 )
 
