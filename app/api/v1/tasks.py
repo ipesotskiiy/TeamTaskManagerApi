@@ -7,7 +7,9 @@ from fastapi import (
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.constants.task_activity import KEY_FOR_LOG_ACTIVITIES
 from app.api.deps import get_current_user
+
 from app.api.v1.dependencies.tasks import (
     check_task_update_permission,
     ensure_can_delete_task,
@@ -31,6 +33,7 @@ from app.schemas.task import (
     TaskStatus,
     TaskUpdate,
 )
+from app.services.task_activity import create_task_activities
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -184,6 +187,15 @@ async def update_task(
         )
 
     for key, value in task_data_dict.items():
+        if key in KEY_FOR_LOG_ACTIVITIES:
+            await create_task_activities(
+                session,
+                key,
+                value,
+                current_user.id,
+                workspace_id,
+                task,
+            )
         setattr(task, key, value)
 
     session.commit()
