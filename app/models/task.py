@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 from sqlalchemy import (
     Enum,
     ForeignKey,
-    Integer,
     String,
     func,
 )
@@ -28,7 +27,10 @@ if TYPE_CHECKING:
 class Task(Base):
     __tablename__ = "tasks"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
     workspace_id: Mapped[int] = mapped_column(
         ForeignKey(
             "workspaces.id",

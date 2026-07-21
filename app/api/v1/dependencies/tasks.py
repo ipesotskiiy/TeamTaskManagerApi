@@ -17,7 +17,7 @@ def get_task_or_404(
         Task.workspace_id == workspace_id,
         Task.id == task_id,
     )
-    task = session.execute(task_stmt).scalars().one_or_none()
+    task = session.scalar(task_stmt)
     if task is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -38,9 +38,7 @@ def validate_assignee_or_400(
         WorkspaceMember.user_id == assignee_user_id,
     )
 
-    assignee_membership = session.execute(
-        assignee_stmt,
-    ).scalars().one_or_none()
+    assignee_membership = session.scalar(assignee_stmt)
 
     if assignee_membership is None:
         raise HTTPException(
@@ -49,7 +47,7 @@ def validate_assignee_or_400(
         )
 
 
-def get_valid_task_update_data(task_data: TaskUpdate) -> dict:
+def get_valid_task_update_data(task_data: TaskUpdate) -> dict[str, object]:
     task_data_dict = task_data.model_dump(exclude_unset=True)
     if not task_data_dict:
         raise HTTPException(
@@ -78,35 +76,41 @@ def get_valid_task_update_data(task_data: TaskUpdate) -> dict:
     return task_data_dict
 
 
-def check_task_update_permission(
+def ensure_can_update_task(
     membership: WorkspaceMember,
     task: Task,
     current_user_id: int,
-    task_data_dict: dict,
+    task_data_dict: dict[str, object],
 ) -> None:
-    is_owner_or_admin = membership.role in ("admin", "owner")
+    if membership.role in ("admin", "owner"):
+        return
 
-    if not is_owner_or_admin:
-        allowed_fields = set()
-        if task.created_by_id == current_user_id:
-            allowed_fields.update(
-                ("title", "description", "priority", "due_date"),
-            )
-        if task.assignee_id == current_user_id:
-            allowed_fields.add("status")
+    allowed_fields: set[str] = set()
 
-        if not allowed_fields:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You cannot change this task",
-            )
+    if task.created_by_id == current_user_id:
+        allowed_fields.update(
+            ("title", "description", "priority", "due_date"),
+        )
 
-        requested_fields = set(task_data_dict)
-        if not requested_fields.issubset(allowed_fields):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You are trying to change fields that are not allowed for you",
-            )
+    if task.assignee_id == current_user_id:
+        allowed_fields.add("status")
+
+    if not allowed_fields:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot change this task",
+        )
+
+    requested_fields = set(task_data_dict)
+
+    if not requested_fields.issubset(allowed_fields):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "You are trying to change fields "
+                "that are not allowed for you"
+            ),
+        )
 
 
 def ensure_can_delete_task(

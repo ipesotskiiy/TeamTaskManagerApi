@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.api.v1.dependencies.workspaces import (
-    check_workspace_role,
+    ensure_workspace_role_or_403,
     get_workspace_and_membership_or_404,
     get_workspace_for_member_or_404,
     get_workspace_update_data,
@@ -69,15 +69,19 @@ async def get_workspaces(
     session: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    workspaces_stmt = select(
-        Workspace
-    ).join(
-        WorkspaceMember, Workspace.id == WorkspaceMember.workspace_id,
-    ).where(
-        WorkspaceMember.user_id == current_user.id,
+    workspaces_stmt = (
+        select(Workspace)
+        .join(
+            WorkspaceMember,
+            Workspace.id == WorkspaceMember.workspace_id,
+        )
+        .where(
+            WorkspaceMember.user_id == current_user.id,
+        )
+        .order_by(Workspace.id)
     )
 
-    return session.execute(workspaces_stmt).scalars().all()
+    return session.scalars(workspaces_stmt).all()
 
 
 @router.get(
@@ -113,7 +117,7 @@ async def update_workspace(
         current_user.id,
     )
 
-    check_workspace_role(
+    ensure_workspace_role_or_403(
         membership,
         ("owner", "admin"),
         "Only owner and admin can change workspace",
@@ -145,7 +149,7 @@ async def delete_workspace(
         current_user.id,
     )
 
-    check_workspace_role(
+    ensure_workspace_role_or_403(
         membership,
         ("owner",),
         "Only owner can delete workspace",

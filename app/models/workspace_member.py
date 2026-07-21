@@ -4,9 +4,9 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.sql.functions import func
 
 from app.db.base import Base
 
@@ -18,7 +18,8 @@ class WorkspaceMember(Base):
     workspace_id: Mapped[int] = mapped_column(
         ForeignKey(
             "workspaces.id",
-            ondelete="CASCADE",),
+            ondelete="CASCADE",
+        ),
     )
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     role: Mapped[str] = mapped_column(

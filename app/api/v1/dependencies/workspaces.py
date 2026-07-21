@@ -6,30 +6,6 @@ from app.models import Workspace, WorkspaceMember
 from app.schemas.workspace import WorkspaceUpdate
 
 
-def get_workspace_for_member_or_404(
-    session: Session,
-    workspace_id: int,
-    user_id: int,
-) -> Workspace:
-    workspace_stmt = select(
-        Workspace
-    ).join(
-        WorkspaceMember, Workspace.id == WorkspaceMember.workspace_id,
-    ).where(
-        Workspace.id == workspace_id,
-        WorkspaceMember.user_id == user_id,
-    )
-
-    workspace = session.execute(workspace_stmt).scalars().one_or_none()
-    if workspace is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workspace not found",
-        )
-
-    return workspace
-
-
 def get_workspace_and_membership_or_404(
     session: Session,
     workspace_id: int,
@@ -55,7 +31,21 @@ def get_workspace_and_membership_or_404(
     return workspace, membership
 
 
-def check_workspace_role(
+def get_workspace_for_member_or_404(
+    session: Session,
+    workspace_id: int,
+    user_id: int,
+) -> Workspace:
+    workspace, _ = get_workspace_and_membership_or_404(
+        session,
+        workspace_id,
+        user_id,
+    )
+
+    return workspace
+
+
+def ensure_workspace_role_or_403(
     membership: WorkspaceMember,
     allowed_roles: tuple[str, ...],
     detail: str,

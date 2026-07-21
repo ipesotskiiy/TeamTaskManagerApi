@@ -20,7 +20,7 @@ def get_task_comment_or_404(
         TaskComment.task_id == task_id,
         TaskComment.id == comment_id,
     )
-    task_comment = session.execute(task_comment_stmt).scalars().one_or_none()
+    task_comment = session.scalar(task_comment_stmt)
 
     if task_comment is None:
         raise HTTPException(
@@ -31,12 +31,12 @@ def get_task_comment_or_404(
     return task_comment
 
 
-def is_can_change_or_delete_or_403(
+def ensure_comment_action_allowed_or_403(
     membership_role: str,
     task_comment_author_id: int,
     current_user_id: int,
     action: ActionType,
-):
+) -> None:
     is_can_change_or_delete_task_comment = (
             membership_role in ("admin", "owner")
             or task_comment_author_id == current_user_id
@@ -49,12 +49,12 @@ def is_can_change_or_delete_or_403(
         )
 
 
-def is_can_comment_or_403(
+def ensure_can_comment_task_or_403(
     membership_role: str,
     task_created_by_id: int,
     task_assignee_id: int | None,
     current_user_id: int,
-):
+) -> None:
     is_can_comment = (
             membership_role in ("owner", "admin")
             or task_created_by_id == current_user_id

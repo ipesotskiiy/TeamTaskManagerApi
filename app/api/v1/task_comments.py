@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.api.v1.dependencies.task_comments import (
     get_task_comment_or_404,
-    is_can_change_or_delete_or_403,
-    is_can_comment_or_403
+    ensure_comment_action_allowed_or_403,
+    ensure_can_comment_task_or_403
 )
 from app.api.v1.dependencies.tasks import get_task_or_404
 from app.api.v1.dependencies.workspaces import (
@@ -60,7 +60,7 @@ async def create_task_comment(
         task_id,
     )
 
-    is_can_comment_or_403(
+    ensure_can_comment_task_or_403(
         membership.role,
         task.created_by_id,
         task.assignee_id,
@@ -126,7 +126,7 @@ async def get_list_task_comments(
 
 
     paginated_tasks_comment = task_comment_stmt.order_by(TaskComment.id).offset(offset).limit(limit)
-    task_comments = session.execute(paginated_tasks_comment).scalars().all()
+    task_comments = session.scalars(paginated_tasks_comment).all()
 
     return task_comments
 
@@ -193,7 +193,7 @@ async def update_task_comment(
         comment_id,
     )
 
-    is_can_change_or_delete_or_403(
+    ensure_comment_action_allowed_or_403(
         membership.role,
         task_comment.author_id,
         current_user.id,
@@ -246,7 +246,7 @@ async def delete_task_comment(
         task.id,
         comment_id
     )
-    is_can_change_or_delete_or_403(
+    ensure_comment_action_allowed_or_403(
         membership.role,
         task_comment.author_id,
         current_user.id,

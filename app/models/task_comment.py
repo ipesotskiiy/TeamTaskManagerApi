@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
-    Integer,
     ForeignKey,
     String,
     CheckConstraint,
@@ -28,7 +27,6 @@ class TaskComment(Base):
     __tablename__ = "task_comments"
 
     id: Mapped[int] = mapped_column(
-        Integer,
         primary_key=True,
         autoincrement=True,
     )

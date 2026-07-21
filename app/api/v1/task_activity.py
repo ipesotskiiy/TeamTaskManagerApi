@@ -49,6 +49,6 @@ async def get_task_activities(
     )
 
     paginated_task_activities = task_activity_stmt.order_by(TaskActivity.id).offset(offset).limit(limit)
-    task_activities = session.execute(paginated_task_activities).scalars().all()
+    task_activities = session.scalars(paginated_task_activities).all()
 
     return task_activities

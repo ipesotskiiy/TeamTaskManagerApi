@@ -1,19 +1,22 @@
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-)
+from pydantic import BaseModel, ConfigDict, Field
+
+
+WorkspaceName = Annotated[
+    str,
+    Field(min_length=5, max_length=200),
+]
 
 
 class WorkspaceCreate(BaseModel):
-    name: str = Field(min_length=5, max_length=200)
+    name: WorkspaceName
     description: str | None = None
 
 
 class WorkspaceUpdate(BaseModel):
-    name: str | None = Field(None, min_length=5, max_length=200)
+    name: WorkspaceName | None = None
     description: str | None = None
 
 

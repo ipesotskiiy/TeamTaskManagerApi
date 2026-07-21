@@ -1,18 +1,21 @@
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import (
-    BaseModel,
-    Field,
-    ConfigDict,
-)
+from pydantic import BaseModel, ConfigDict, Field
+
+
+TaskCommentText = Annotated[
+    str,
+    Field(min_length=1, max_length=1000),
+]
 
 
 class TaskCommentCreate(BaseModel):
-    text: str = Field(min_length=1, max_length=1000)
+    text: TaskCommentText
 
 
 class TaskCommentUpdate(BaseModel):
-    text: str = Field(min_length=1, max_length=1000)
+    text: TaskCommentText
 
 
 class TaskCommentRead(BaseModel):

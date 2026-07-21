@@ -7,11 +7,11 @@ from fastapi import (
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.constants.task_activity import KEY_FOR_LOG_ACTIVITIES
+from app.constants.task_activity import TASK_UPDATE_EVENT_BY_FIELD
 from app.api.deps import get_current_user
 
 from app.api.v1.dependencies.tasks import (
-    check_task_update_permission,
+    ensure_can_update_task,
     ensure_can_delete_task,
     get_task_or_404,
     get_valid_task_update_data,
@@ -33,7 +33,7 @@ from app.schemas.task import (
     TaskStatus,
     TaskUpdate,
 )
-from app.services.task_activity import create_task_activities
+from app.services.task_activity import create_task_update_activity
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -113,7 +113,7 @@ async def get_tasks(
         tasks_stmt = tasks_stmt.where(Task.assignee_id == task_assignee_id)
 
     paginated_tasks = tasks_stmt.order_by(Task.id).offset(offset).limit(limit)
-    tasks = session.execute(paginated_tasks).scalars().all()
+    tasks = session.scalars(paginated_tasks).all()
 
     return tasks
 
@@ -170,7 +170,7 @@ async def update_task(
 
     task_data_dict = get_valid_task_update_data(task_data)
 
-    check_task_update_permission(
+    ensure_can_update_task(
         membership,
         task,
         current_user.id,
@@ -187,8 +187,8 @@ async def update_task(
         )
 
     for key, value in task_data_dict.items():
-        if key in KEY_FOR_LOG_ACTIVITIES:
-            await create_task_activities(
+        if key in TASK_UPDATE_EVENT_BY_FIELD:
+            await create_task_update_activity(
                 session,
                 key,
                 value,
