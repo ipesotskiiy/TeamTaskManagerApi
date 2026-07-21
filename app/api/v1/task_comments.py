@@ -28,6 +28,11 @@ from app.schemas.task_comment import (
     TaskCommentCreate,
     TaskCommentUpdate,
 )
+from app.services.task_activity import (
+    create_task_comment_activity,
+    create_comment_updated_activity,
+    create_comment_deleted_activity,
+)
 
 router = APIRouter(prefix="/comments", tags=["comments"])
 
@@ -60,6 +65,14 @@ async def create_task_comment(
         task.created_by_id,
         task.assignee_id,
         current_user.id
+    )
+
+    await create_task_comment_activity(
+        session=session,
+        task_comment=task_comment_data.text,
+        workspace_id=workspace_id,
+        task_id=task_id,
+        current_user_id=current_user.id,
     )
 
     task_comment = TaskComment(
@@ -190,6 +203,15 @@ async def update_task_comment(
     update_task_comment_data_dict = update_task_comment_data.model_dump(exclude_unset=True)
 
     for key, value in update_task_comment_data_dict.items():
+        if key == "text":
+            await create_comment_updated_activity(
+                session=session,
+                old_task_comment_text=task_comment.text,
+                new_task_comment_text=value,
+                workspace_id=workspace_id,
+                task_id=task_id,
+                current_user_id=current_user.id
+            )
         setattr(task_comment, key, value)
 
     session.commit()
@@ -229,6 +251,14 @@ async def delete_task_comment(
         task_comment.author_id,
         current_user.id,
         "delete",
+    )
+
+    await create_comment_deleted_activity(
+        session=session,
+        old_task_comment_text=task_comment.text,
+        workspace_id=workspace_id,
+        task_id=task_id,
+        current_user_id=current_user.id,
     )
 
     session.delete(task_comment)

@@ -1,7 +1,7 @@
 from fastapi import status
 from sqlalchemy import select
 
-from app.models import TaskActivity
+from app.models import TaskActivity, TaskComment
 
 
 def test_member_get_task_activities(
@@ -669,3 +669,393 @@ def test_invalid_assignee_creates_no_activity(
     task_activity = test_session.execute(task_activity_stmt).scalars().one_or_none()
 
     assert task_activity is None
+
+
+def test_create_comment_create_activity(
+    test_session,
+    test_db_client,
+    first_user,
+    authorize_first_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+):
+    create_comment_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/comments/",
+        json={"text": "test_owner_comment"},
+        headers=authorize_first_user,
+    )
+
+    assert create_comment_response.status_code == status.HTTP_201_CREATED
+
+    task_activity_stmt = select(
+        TaskActivity,
+    ).where(
+        TaskActivity.workspace_id == first_user_workspace.id,
+        TaskActivity.task_id == first_user_workspace_first_task.id,
+    )
+    task_activity = test_session.execute(task_activity_stmt).scalars().one_or_none()
+
+    assert task_activity is not None
+    assert task_activity.event_type == "comment_created"
+    assert task_activity.field_name == "comment"
+    assert task_activity.old_value is None
+    assert task_activity.new_value == "test_owner_comment"
+    assert task_activity.actor_id == first_user.id
+    assert task_activity.task_id == first_user_workspace_first_task.id
+    assert task_activity.workspace_id == first_user_workspace.id
+
+
+def test_error_create_comment_no_create_activity(
+    test_session,
+    test_db_client,
+    second_user,
+    authorize_second_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+    add_workspace_member
+):
+    add_workspace_member(first_user_workspace, second_user)
+    create_comment_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/comments/",
+        json={"text": "test_owner_comment"},
+        headers=authorize_second_user,
+    )
+
+    assert create_comment_response.status_code == status.HTTP_403_FORBIDDEN
+
+    task_activity_stmt = select(
+        TaskActivity,
+    ).where(
+        TaskActivity.workspace_id == first_user_workspace.id,
+        TaskActivity.task_id == first_user_workspace_first_task.id,
+    )
+    task_activity = test_session.execute(task_activity_stmt).scalars().one_or_none()
+
+    assert task_activity is None
+
+
+def test_invalid_comment_text_no_create_activity(
+    test_session,
+    test_db_client,
+    first_user,
+    authorize_first_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+):
+    create_comment_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/comments/",
+        json={"text": "a" * 1001},
+        headers=authorize_first_user,
+    )
+
+    assert create_comment_response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    task_activity_stmt = select(
+        TaskActivity,
+    ).where(
+        TaskActivity.workspace_id == first_user_workspace.id,
+        TaskActivity.task_id == first_user_workspace_first_task.id,
+    )
+    task_activity = test_session.execute(task_activity_stmt).scalars().one_or_none()
+
+    assert task_activity is None
+
+
+def test_update_comment_create_activity(
+    test_session,
+    test_db_client,
+    first_user,
+    authorize_first_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+    first_user_first_workspace_first_task_first_comment,
+):
+    old_text = first_user_first_workspace_first_task_first_comment.text
+    update_comment_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/"
+        f"comments/{first_user_first_workspace_first_task_first_comment.id}/",
+        json={"text": "update_owner_test_comment"},
+        headers=authorize_first_user,
+    )
+
+    assert update_comment_response.status_code == status.HTTP_200_OK
+
+    task_activity_stmt = select(
+        TaskActivity,
+    ).where(
+        TaskActivity.workspace_id == first_user_workspace.id,
+        TaskActivity.task_id == first_user_workspace_first_task.id,
+    ).order_by(TaskActivity.id)
+    task_activities = test_session.execute(task_activity_stmt).scalars().all()
+    task_activity = task_activities[-1]
+
+    assert task_activity.event_type == "comment_updated"
+    assert task_activity.field_name == "text"
+    assert task_activity.old_value == old_text
+    assert task_activity.new_value == "update_owner_test_comment"
+    assert task_activity.actor_id == first_user.id
+    assert task_activity.task_id == first_user_workspace_first_task.id
+    assert task_activity.workspace_id == first_user_workspace.id
+
+
+def test_same_comment_text_does_not_create_new_activity(
+    test_session,
+    test_db_client,
+    first_user,
+    authorize_first_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+    first_user_first_workspace_first_task_first_comment,
+):
+    activity_identifiers_before_request = {
+        activity_identifier
+        for activity_identifier in test_session.scalars(
+            select(TaskActivity.id).where(
+                TaskActivity.workspace_id == first_user_workspace.id,
+                TaskActivity.task_id == first_user_workspace_first_task.id,
+            )
+        ).all()
+    }
+
+    update_comment_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/"
+        f"comments/{first_user_first_workspace_first_task_first_comment.id}/",
+        json={"text": f"{first_user_first_workspace_first_task_first_comment.text}"},
+        headers=authorize_first_user,
+    )
+
+    assert update_comment_response.status_code == status.HTTP_200_OK
+
+    activity_identifiers_after_request = {
+        activity_identifier
+        for activity_identifier in test_session.scalars(
+            select(TaskActivity.id).where(
+                TaskActivity.workspace_id == first_user_workspace.id,
+                TaskActivity.task_id == first_user_workspace_first_task.id,
+            )
+        ).all()
+    }
+
+    assert activity_identifiers_after_request == activity_identifiers_before_request
+
+
+def test_forbidden_comment_update_does_not_create_new_activity(
+    test_session,
+    test_db_client,
+    second_user,
+    authorize_second_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+    first_user_first_workspace_first_task_first_comment,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+    old_text = first_user_first_workspace_first_task_first_comment.text
+
+    activity_identifiers_before_request = {
+        activity_identifier
+        for activity_identifier in test_session.scalars(
+            select(TaskActivity.id).where(
+                TaskActivity.workspace_id == first_user_workspace.id,
+                TaskActivity.task_id == first_user_workspace_first_task.id,
+            )
+        ).all()
+    }
+
+    update_comment_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/"
+        f"comments/{first_user_first_workspace_first_task_first_comment.id}/",
+        json={"text": "update_text"},
+        headers=authorize_second_user,
+    )
+    test_session.refresh(first_user_first_workspace_first_task_first_comment)
+
+    assert update_comment_response.status_code == status.HTTP_403_FORBIDDEN
+    comment = test_session.get(TaskComment, first_user_first_workspace_first_task_first_comment.id)
+    assert comment.text == old_text
+
+    activity_identifiers_after_request = {
+        activity_identifier
+        for activity_identifier in test_session.scalars(
+            select(TaskActivity.id).where(
+                TaskActivity.workspace_id == first_user_workspace.id,
+                TaskActivity.task_id == first_user_workspace_first_task.id,
+            )
+        ).all()
+    }
+
+    assert activity_identifiers_after_request == activity_identifiers_before_request
+
+
+def test_invalid_comment_update_does_not_create_new_activity(
+    test_session,
+    test_db_client,
+    first_user,
+    authorize_first_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+    first_user_first_workspace_first_task_first_comment,
+):
+    old_text = first_user_first_workspace_first_task_first_comment.text
+
+    activity_identifiers_before_request = {
+        activity_identifier
+        for activity_identifier in test_session.scalars(
+            select(TaskActivity.id).where(
+                TaskActivity.workspace_id == first_user_workspace.id,
+                TaskActivity.task_id == first_user_workspace_first_task.id,
+            )
+        ).all()
+    }
+
+    update_comment_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/"
+        f"comments/{first_user_first_workspace_first_task_first_comment.id}/",
+        json={"text": "a" * 1001},
+        headers=authorize_first_user,
+    )
+    test_session.refresh(first_user_first_workspace_first_task_first_comment)
+
+    assert update_comment_response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    comment = test_session.get(TaskComment, first_user_first_workspace_first_task_first_comment.id)
+    assert comment.text == old_text
+
+    activity_identifiers_after_request = {
+        activity_identifier
+        for activity_identifier in test_session.scalars(
+            select(TaskActivity.id).where(
+                TaskActivity.workspace_id == first_user_workspace.id,
+                TaskActivity.task_id == first_user_workspace_first_task.id,
+            )
+        ).all()
+    }
+
+    assert activity_identifiers_after_request == activity_identifiers_before_request
+
+
+def test_delete_comment_create_activity(
+    test_session,
+    test_db_client,
+    first_user,
+    authorize_first_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+    first_user_first_workspace_first_task_first_comment,
+):
+    comment_identifier = first_user_first_workspace_first_task_first_comment.id
+    comment_text = first_user_first_workspace_first_task_first_comment.text
+    delete_comment_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/"
+        f"comments/{first_user_first_workspace_first_task_first_comment.id}/",
+        headers=authorize_first_user,
+    )
+
+    assert delete_comment_response.status_code == status.HTTP_204_NO_CONTENT
+    comment = test_session.get(TaskComment, comment_identifier)
+    assert comment is None
+
+    task_activity_stmt = select(
+        TaskActivity,
+    ).where(
+        TaskActivity.workspace_id == first_user_workspace.id,
+        TaskActivity.task_id == first_user_workspace_first_task.id,
+    ).order_by(TaskActivity.id)
+    task_activities = test_session.execute(task_activity_stmt).scalars().all()
+    task_activity = task_activities[-1]
+
+    assert task_activity.event_type == "comment_deleted"
+    assert task_activity.field_name == "comment"
+    assert task_activity.old_value == comment_text
+    assert task_activity.new_value is None
+    assert task_activity.actor_id == first_user.id
+    assert task_activity.task_id == first_user_workspace_first_task.id
+    assert task_activity.workspace_id == first_user_workspace.id
+
+
+def test_forbidden_comment_delete_does_not_create_new_activity(
+    test_session,
+    test_db_client,
+    second_user,
+    authorize_second_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+    first_user_first_workspace_first_task_first_comment,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+
+    activity_identifiers_before_request = {
+        activity_identifier
+        for activity_identifier in test_session.scalars(
+            select(TaskActivity.id).where(
+                TaskActivity.workspace_id == first_user_workspace.id,
+                TaskActivity.task_id == first_user_workspace_first_task.id,
+            )
+        ).all()
+    }
+
+    delete_comment_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/"
+        f"comments/{first_user_first_workspace_first_task_first_comment.id}/",
+        headers=authorize_second_user,
+    )
+
+    assert delete_comment_response.status_code == status.HTTP_403_FORBIDDEN
+
+    comment = test_session.get(TaskComment, first_user_first_workspace_first_task_first_comment.id)
+    assert comment is not None
+
+    activity_identifiers_after_request = {
+        activity_identifier
+        for activity_identifier in test_session.scalars(
+            select(TaskActivity.id).where(
+                TaskActivity.workspace_id == first_user_workspace.id,
+                TaskActivity.task_id == first_user_workspace_first_task.id,
+            )
+        ).all()
+    }
+
+    assert activity_identifiers_after_request == activity_identifiers_before_request
+
+
+def test_non_member_comment_delete_does_not_create_new_activity(
+    test_session,
+    test_db_client,
+    authorize_second_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+    first_user_first_workspace_first_task_first_comment,
+):
+    activity_identifiers_before_request = {
+        activity_identifier
+        for activity_identifier in test_session.scalars(
+            select(TaskActivity.id).where(
+                TaskActivity.workspace_id == first_user_workspace.id,
+                TaskActivity.task_id == first_user_workspace_first_task.id,
+            )
+        ).all()
+    }
+
+    delete_comment_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/"
+        f"comments/{first_user_first_workspace_first_task_first_comment.id}/",
+        headers=authorize_second_user,
+    )
+
+    assert delete_comment_response.status_code == status.HTTP_404_NOT_FOUND
+
+    comment = test_session.get(TaskComment, first_user_first_workspace_first_task_first_comment.id)
+    assert comment is not None
+
+    activity_identifiers_after_request = {
+        activity_identifier
+        for activity_identifier in test_session.scalars(
+            select(TaskActivity.id).where(
+                TaskActivity.workspace_id == first_user_workspace.id,
+                TaskActivity.task_id == first_user_workspace_first_task.id,
+            )
+        ).all()
+    }
+
+    assert activity_identifiers_after_request == activity_identifiers_before_request
