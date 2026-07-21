@@ -1229,3 +1229,48 @@ def test_delete_task_comment_with_missing_comment_id(
         headers=authorize_first_user,
     )
     assert delete_comment_response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_get_comments_for_task_from_another_workspace_gets_404(
+    test_db_client,
+    authorize_first_user,
+    first_user_workspace,
+    second_user_workspace_first_task,
+):
+    get_comments_response = test_db_client.get(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/"
+        f"{second_user_workspace_first_task.id}/comments/",
+        headers=authorize_first_user,
+    )
+
+    assert get_comments_response.status_code == status.HTTP_404_NOT_FOUND
+    assert get_comments_response.json()["detail"] == "Task not found"
+
+
+def test_update_comment_missing_task_gets_404(
+        test_db_client,
+        authorize_first_user,
+        first_user_workspace,
+        second_user_first_workspace_first_task_first_comment,
+):
+    get_comment_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/999999/"
+        f"comments/{second_user_first_workspace_first_task_first_comment.id}/",
+        headers=authorize_first_user,
+        json={"text": "test_owner_comment"},
+    )
+    assert get_comment_response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_delete_comment_missing_task_gets_404(
+        test_db_client,
+        authorize_first_user,
+        first_user_workspace,
+        second_user_first_workspace_first_task_first_comment,
+):
+    delete_comment_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/999999/"
+        f"comments/{second_user_first_workspace_first_task_first_comment.id}/",
+        headers=authorize_first_user,
+    )
+    assert delete_comment_response.status_code == status.HTTP_404_NOT_FOUND

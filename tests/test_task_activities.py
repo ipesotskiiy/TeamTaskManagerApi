@@ -1,7 +1,9 @@
+import datetime
+
 from fastapi import status
 from sqlalchemy import select
 
-from app.models import TaskActivity, TaskComment
+from app.models import TaskActivity, TaskComment, Task
 
 
 def test_member_get_task_activities(
@@ -409,6 +411,60 @@ def test_change_task_due_date_create_activity(
     assert task_activity is not None
     assert task_activity.old_value == old_due_date
     assert task_activity.new_value == data["due_date"]
+    assert task_activity.event_type == "due_date_changed"
+    assert task_activity.field_name == "due_date"
+
+
+def test_clear_due_date_creates_activity(
+    test_session,
+    test_db_client,
+    first_user,
+    authorize_first_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+):
+    due_date_before_clear = datetime.datetime(
+        year=2026,
+        month=8,
+        day=15,
+        hour=12,
+        minute=30,
+    )
+
+    first_user_workspace_first_task.due_date = due_date_before_clear
+
+    test_session.commit()
+    test_session.refresh(first_user_workspace_first_task)
+
+    data = {"due_date": None}
+    old_due_date = first_user_workspace_first_task.due_date
+
+    update_task_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/",
+        headers=authorize_first_user,
+        json=data,
+    )
+    assert update_task_response.status_code == status.HTTP_200_OK
+
+    task = test_session.get(
+        Task,
+        first_user_workspace_first_task.id
+    )
+
+    assert task.due_date is None
+
+    task_activity_stmt = select(
+        TaskActivity,
+    ).where(
+        TaskActivity.workspace_id == first_user_workspace.id,
+        TaskActivity.task_id == first_user_workspace_first_task.id,
+    )
+
+    task_activity = test_session.execute(task_activity_stmt).scalars().one_or_none()
+
+    assert task_activity is not None
+    assert task_activity.old_value == old_due_date.isoformat()
+    assert task_activity.new_value is None
     assert task_activity.event_type == "due_date_changed"
     assert task_activity.field_name == "due_date"
 
