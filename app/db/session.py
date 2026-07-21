@@ -1,14 +1,22 @@
+from collections.abc import Iterator
+
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
 
 
-engine = create_engine(settings.DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    settings.DATABASE_URL,
+    connect_args={"check_same_thread": False},
+)
 
 
 @event.listens_for(engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
+def set_sqlite_pragma(
+    dbapi_connection,
+    _connection_record,
+) -> None:
     autocommit = dbapi_connection.autocommit
     dbapi_connection.autocommit = True
 
@@ -22,10 +30,6 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 SessionLocal = sessionmaker(bind=engine)
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
+def get_db() -> Iterator[Session]:
+    with SessionLocal() as session:
+        yield session

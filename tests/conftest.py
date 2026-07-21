@@ -9,7 +9,7 @@ from app.core.security import get_password_hash
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models import User, Workspace, Task, WorkspaceMember
+from app.models import User, Workspace, Task, WorkspaceMember, TaskComment, TaskActivity
 
 
 @pytest.fixture
@@ -264,3 +264,167 @@ def add_workspace_member(test_session):
         return workspace_member
 
     return _add_workspace_member
+
+
+@pytest.fixture
+def first_user_first_workspace_first_task_first_comment(
+    test_session,
+    test_db_client,
+    first_user_workspace,
+    first_user_workspace_first_task,
+    authorize_first_user
+):
+    create_comment_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/comments/",
+        json={"text": "test_owner_comment"},
+        headers=authorize_first_user,
+    )
+
+    assert create_comment_response.status_code == status.HTTP_201_CREATED
+
+    create_comment_response_data = create_comment_response.json()
+    task_comment = test_session.get(TaskComment, create_comment_response_data["id"])
+    return task_comment
+
+
+@pytest.fixture
+def first_user_first_workspace_first_task_second_comment(
+    test_session,
+    test_db_client,
+    first_user_workspace,
+    first_user_workspace_first_task,
+    authorize_first_user
+):
+    create_comment_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/comments/",
+        json={"text": "test_owner_comment"},
+        headers=authorize_first_user,
+    )
+
+    assert create_comment_response.status_code == status.HTTP_201_CREATED
+
+    create_comment_response_data = create_comment_response.json()
+    task_comment = test_session.get(TaskComment, create_comment_response_data["id"])
+    return task_comment
+
+
+@pytest.fixture
+def first_user_first_workspace_second_task_first_comment(
+    test_session,
+    test_db_client,
+    first_user_workspace,
+    first_user_workspace_second_task,
+    authorize_first_user
+):
+    create_comment_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_second_task.id}/comments/",
+        json={"text": "test_owner_comment"},
+        headers=authorize_first_user,
+    )
+
+    assert create_comment_response.status_code == status.HTTP_201_CREATED
+
+    create_comment_response_data = create_comment_response.json()
+    task_comment = test_session.get(TaskComment, create_comment_response_data["id"])
+    return task_comment
+
+
+@pytest.fixture
+def second_user_first_workspace_first_task_first_comment(
+    test_session,
+    test_db_client,
+    second_user_workspace,
+    second_user_workspace_first_task,
+    authorize_second_user
+):
+    create_comment_response = test_db_client.post(
+        f"/api/v1/workspaces/{second_user_workspace.id}/tasks/{second_user_workspace_first_task.id}/comments/",
+        json={"text": "test_owner_comment"},
+        headers=authorize_second_user,
+    )
+
+    assert create_comment_response.status_code == status.HTTP_201_CREATED
+
+    create_comment_response_data = create_comment_response.json()
+    task_comment = test_session.get(TaskComment, create_comment_response_data["id"])
+    return task_comment
+
+
+@pytest.fixture
+def first_user_first_workspace_first_task_first_activity(
+        test_session,
+        first_user,
+        first_user_workspace,
+        first_user_workspace_first_task,
+):
+    task_activity = TaskActivity(
+        task_id=first_user_workspace_first_task.id,
+        workspace_id=first_user_workspace.id,
+        actor_id=first_user.id,
+        event_type="created",
+
+    )
+    test_session.add(task_activity)
+    test_session.commit()
+    test_session.refresh(task_activity)
+    return task_activity
+
+
+@pytest.fixture
+def first_user_first_workspace_first_task_second_activity(
+        test_session,
+        first_user,
+        first_user_workspace,
+        first_user_workspace_first_task,
+):
+    task_activity = TaskActivity(
+        task_id=first_user_workspace_first_task.id,
+        workspace_id=first_user_workspace.id,
+        actor_id=first_user.id,
+        event_type="status_changed",
+
+    )
+    test_session.add(task_activity)
+    test_session.commit()
+    test_session.refresh(task_activity)
+    return task_activity
+
+
+@pytest.fixture
+def first_user_first_workspace_second_task_first_activity(
+        test_session,
+        first_user,
+        first_user_workspace,
+        first_user_workspace_second_task,
+):
+    task_activity = TaskActivity(
+        task_id=first_user_workspace_second_task.id,
+        workspace_id=first_user_workspace.id,
+        actor_id=first_user.id,
+        event_type="created",
+
+    )
+    test_session.add(task_activity)
+    test_session.commit()
+    test_session.refresh(task_activity)
+    return task_activity
+
+
+@pytest.fixture
+def second_user_first_workspace_first_task_first_activity(
+        test_session,
+        second_user,
+        second_user_workspace,
+        second_user_workspace_first_task,
+):
+    task_activity = TaskActivity(
+        task_id=second_user_workspace_first_task.id,
+        workspace_id=second_user_workspace.id,
+        actor_id=second_user.id,
+        event_type="created",
+
+    )
+    test_session.add(task_activity)
+    test_session.commit()
+    test_session.refresh(task_activity)
+    return task_activity

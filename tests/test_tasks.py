@@ -1,36 +1,25 @@
+import pytest
 from fastapi import status
 from sqlalchemy import select
 
-from app.models import WorkspaceMember, Task
+from app.models import Task, TaskComment, TaskActivity, Workspace
 
 
 def test_member_can_create_task(
     test_session,
     test_db_client,
     first_user,
+    second_user,
     authorize_first_user,
+    authorize_second_user,
     first_user_workspace,
+    add_workspace_member,
 ):
-    workspace_member_stmt = select(
-        WorkspaceMember,
-    ).where(
-        WorkspaceMember.user_id == first_user.id,
-        WorkspaceMember.workspace_id == first_user_workspace.id,
-    )
-    workspace_member = test_session.execute(
-        workspace_member_stmt,
-    ).scalars().one_or_none()
-
-    assert workspace_member is not None
-
-    workspace_member.role = "member"
-
-    test_session.commit()
-    test_session.refresh(workspace_member)
+    add_workspace_member(first_user_workspace, second_user)
 
     create_task_response = test_db_client.post(
         f"/api/v1/workspaces/{first_user_workspace.id}/tasks/",
-        headers=authorize_first_user,
+        headers=authorize_second_user,
         json={
             "title": "first test task",
             "description": "first task description",
@@ -47,14 +36,14 @@ def test_member_can_create_task(
     assert task_obj is not None
     assert task_obj.title == "first test task"
     assert task_obj.workspace_id == first_user_workspace.id
-    assert task_obj.created_by_id == first_user.id
+    assert task_obj.created_by_id == second_user.id
     assert task_obj.assignee_id == first_user.id
     assert task_obj.status == "todo"
     assert task_obj.priority == "medium"
 
     assert task_data["title"] == "first test task"
     assert task_data["workspace_id"] == first_user_workspace.id
-    assert task_data["created_by_id"] == first_user.id
+    assert task_data["created_by_id"] == second_user.id
 
 
 def test_create_task_non_member_gets_404(
@@ -565,6 +554,10 @@ def test_assignee_only_cannot_delete_task(
     assert delete_task_response.status_code == status.HTTP_403_FORBIDDEN
     assert "You cannot delete this task" in delete_task_response.text
 
+    task = test_session.get(Task, first_user_workspace_second_task.id)
+    assert task is not None
+
+
 
 def test_regular_member_cannot_delete_task(
     test_session,
@@ -585,8 +578,12 @@ def test_regular_member_cannot_delete_task(
     assert delete_task_response.status_code == status.HTTP_403_FORBIDDEN
     assert "You cannot delete this task" in delete_task_response.text
 
+    task = test_session.get(Task, first_user_workspace_second_task.id)
+    assert task is not None
+
 
 def test_non_member_delete_gets_404(
+    test_session,
     test_db_client,
     authorize_second_user,
     first_user_workspace,
@@ -599,8 +596,12 @@ def test_non_member_delete_gets_404(
 
     assert delete_task_response.status_code == status.HTTP_404_NOT_FOUND
 
+    task = test_session.get(Task, first_user_workspace_second_task.id)
+    assert task is not None
+
 
 def test_delete_task_from_another_workspace_gets_404(
+    test_session,
     test_db_client,
     authorize_first_user,
     first_user_workspace,
@@ -612,6 +613,9 @@ def test_delete_task_from_another_workspace_gets_404(
     )
 
     assert delete_task_response.status_code == status.HTTP_404_NOT_FOUND
+
+    task = test_session.get(Task, second_user_workspace_first_task.id)
+    assert task is not None
 
 
 def test_owner_can_update_any_task_field(
@@ -1208,3 +1212,267 @@ def test_update_missing_task_gets_404(
 
     test_session.refresh(first_user_workspace_second_task)
     assert first_user_workspace_second_task.title != update_data["title"]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"title": ""},
+        {"title": "a" * 201},
+        {
+            "title": "valid title",
+            "priority": "super_duper",
+        },
+        {
+            "title": "valid title",
+            "assignee_id": 0,
+        },
+        {
+            "title": "valid title",
+            "due_date": "hi",
+        },
+    ],
+)
+def test_create_task_invalid_payload_gets_422(
+    test_db_client,
+    second_user,
+    authorize_second_user,
+    first_user_workspace,
+    add_workspace_member,
+    data
+):
+    add_workspace_member(first_user_workspace, second_user)
+
+    create_task_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/",
+        headers=authorize_second_user,
+        json=data
+    )
+
+    assert create_task_response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"title": ""},
+        {"title": "a" * 201},
+        {"status": "unknown_status"},
+        {"priority": "super_duper"},
+        {"assignee_id": 0},
+        {"due_date": "hi"}
+    ]
+)
+def test_update_task_invalid_payload_gets_422(
+    test_db_client,
+    authorize_first_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+    data
+):
+
+    update_task_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/",
+        headers=authorize_first_user,
+        json=data
+    )
+
+    assert update_task_response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+def test_assignee_mixed_allowed_and_forbidden_fields_gets_403_without_partial_update(
+    test_session,
+    test_db_client,
+    second_user,
+    authorize_second_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+    first_user_workspace_first_task.assignee_id = second_user.id
+    test_session.commit()
+    test_session.refresh(first_user_workspace_first_task)
+
+    data = {
+        "status": "in_progress",
+        "title": "new_updated_title",
+    }
+
+    old_status = first_user_workspace_first_task.status
+    old_title = first_user_workspace_first_task.title
+
+    update_task_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/",
+        headers=authorize_second_user,
+        json=data
+    )
+
+    assert update_task_response.status_code == status.HTTP_403_FORBIDDEN
+
+    test_session.refresh(first_user_workspace_first_task)
+
+    assert first_user_workspace_first_task.status == old_status
+    assert first_user_workspace_first_task.title == old_title
+
+
+def test_creator_and_assignee_cannot_update_assignee_id(
+    test_session,
+    test_db_client,
+    first_user,
+    second_user,
+    authorize_second_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+    first_user_workspace_first_task.assignee_id = second_user.id
+    first_user_workspace_first_task.created_by_id = second_user.id
+    test_session.commit()
+    test_session.refresh(first_user_workspace_first_task)
+
+    data = {
+        "assignee_id": first_user.id,
+    }
+
+    old_assignee_id = first_user_workspace_first_task.assignee_id
+
+    update_task_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/",
+        headers=authorize_second_user,
+        json=data
+    )
+
+    assert update_task_response.status_code == status.HTTP_403_FORBIDDEN
+
+    test_session.refresh(first_user_workspace_first_task)
+
+    assert first_user_workspace_first_task.assignee_id == old_assignee_id
+
+
+def test_delete_missing_task_gets_404(
+    test_db_client,
+    authorize_first_user,
+    first_user_workspace,
+):
+    delete_task_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/9999999999999999/",
+        headers=authorize_first_user,
+    )
+
+    assert delete_task_response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_delete_task_cascades_comments_and_activities(
+    test_session,
+    test_db_client,
+    first_user,
+    authorize_first_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+    first_user_first_workspace_first_task_first_comment,
+):
+    task_id = first_user_workspace_first_task.id
+    comment_id = first_user_first_workspace_first_task_first_comment.id
+
+    delete_task_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/",
+        headers=authorize_first_user,
+    )
+
+    assert delete_task_response.status_code == status.HTTP_204_NO_CONTENT
+
+    task = test_session.get(Task, task_id)
+    assert task is None
+
+    task_comment = test_session.get(TaskComment, comment_id)
+    assert task_comment is None
+
+    task_activity_stmt = select(
+        TaskActivity,
+    ).where(
+        TaskActivity.workspace_id == first_user_workspace.id,
+        TaskActivity.task_id == task_id,
+    )
+
+    task_activity = test_session.execute(task_activity_stmt).scalars().one_or_none()
+
+    assert task_activity is None
+
+
+def test_delete_workspace_cascades_tasks_comments_and_activities(
+    test_session,
+    test_db_client,
+    first_user,
+    authorize_first_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+    first_user_first_workspace_first_task_first_comment,
+):
+    workspace_id = first_user_workspace.id
+    task_id = first_user_workspace_first_task.id
+    comment_id = first_user_first_workspace_first_task_first_comment.id
+
+    delete_task_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/",
+        headers=authorize_first_user,
+    )
+
+    assert delete_task_response.status_code == status.HTTP_204_NO_CONTENT
+
+    workspace = test_session.get(Workspace, workspace_id)
+    assert workspace is None
+
+    task = test_session.get(Task, task_id)
+    assert task is None
+
+    task_comment = test_session.get(TaskComment, comment_id)
+    assert task_comment is None
+
+    task_activity_stmt = select(
+        TaskActivity,
+    ).where(
+        TaskActivity.workspace_id == workspace_id,
+        TaskActivity.task_id == task_id,
+    )
+
+    task_activity = test_session.execute(task_activity_stmt).scalars().one_or_none()
+
+    assert task_activity is None
+
+def test_creator_mixed_allowed_and_forbidden_fields_gets_403_without_partial_update(
+    test_session,
+    test_db_client,
+    second_user,
+    authorize_second_user,
+    first_user_workspace,
+    first_user_workspace_first_task,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+
+    first_user_workspace_first_task.created_by_id = second_user.id
+    test_session.commit()
+    test_session.refresh(first_user_workspace_first_task)
+
+    data = {
+        "title": "hi",
+        "status": "in_progress"
+    }
+
+    old_title = first_user_workspace_first_task.title
+    old_status = first_user_workspace_first_task.status
+
+    update_task_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/tasks/{first_user_workspace_first_task.id}/",
+        headers=authorize_second_user,
+        json=data
+    )
+
+    assert update_task_response.status_code == status.HTTP_403_FORBIDDEN
+
+    test_session.refresh(first_user_workspace_first_task)
+
+    assert first_user_workspace_first_task.title == old_title
+    assert first_user_workspace_first_task.status == old_status

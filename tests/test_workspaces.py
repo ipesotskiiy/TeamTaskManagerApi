@@ -68,16 +68,19 @@ def test_get_workspaces_returns_only_user_workspaces(
 
 def test_get_workspace_success_for_member(
     test_db_client,
-    authorize_first_user,
+    authorize_second_user,
     first_user_workspace,
+    second_user,
+    add_workspace_member,
 ):
-    response = get_workspace_owner_response = test_db_client.get(
+    add_workspace_member(first_user_workspace, second_user)
+    response = test_db_client.get(
         f"/api/v1/workspaces/{first_user_workspace.id}/",
-        headers=authorize_first_user,
+        headers=authorize_second_user,
     )
     response_data = response.json()
 
-    assert get_workspace_owner_response.status_code == status.HTTP_200_OK
+    assert response.status_code == status.HTTP_200_OK
     assert response_data["id"] == first_user_workspace.id
     assert response_data["name"] == first_user_workspace.name
 
@@ -122,32 +125,17 @@ def test_owner_can_update_workspace(
 def test_admin_can_update_workspace(
     test_db_client,
     test_session,
-    first_user,
-    authorize_first_user,
+    second_user,
+    authorize_second_user,
     first_user_workspace,
+    add_workspace_member
 ):
-    workspace_member_stmt = select(
-        WorkspaceMember,
-    ).where(
-        WorkspaceMember.user_id == first_user.id,
-        WorkspaceMember.workspace_id == first_user_workspace.id,
-    )
-    workspace_member = test_session.execute(
-        workspace_member_stmt,
-    ).scalars().one_or_none()
-
-    assert workspace_member is not None
-
-    workspace_member.role = "admin"
-
-    test_session.commit()
-    test_session.refresh(workspace_member)
-
+    add_workspace_member(first_user_workspace, second_user, "admin")
     data_for_update = {"name": "admin new name"}
     update_workspace_admin_response = test_db_client.patch(
         f"/api/v1/workspaces/{first_user_workspace.id}/",
         json=data_for_update,
-        headers=authorize_first_user,
+        headers=authorize_second_user,
     )
 
     assert update_workspace_admin_response.status_code == status.HTTP_200_OK
@@ -160,33 +148,17 @@ def test_admin_can_update_workspace(
 
 def test_member_cannot_update_workspace(
     test_db_client,
-    test_session,
-    first_user,
-    authorize_first_user,
+    second_user,
+    authorize_second_user,
     first_user_workspace,
+    add_workspace_member
 ):
-    workspace_member_stmt = select(
-        WorkspaceMember,
-    ).where(
-        WorkspaceMember.user_id == first_user.id,
-        WorkspaceMember.workspace_id == first_user_workspace.id,
-    )
-    workspace_member = test_session.execute(
-        workspace_member_stmt,
-    ).scalars().one_or_none()
-
-    assert workspace_member is not None
-
-    workspace_member.role = "member"
-
-    test_session.commit()
-    test_session.refresh(workspace_member)
-
+    add_workspace_member(first_user_workspace, second_user)
     data_for_update = {"name": "member new name"}
     update_workspace_member_response = test_db_client.patch(
         f"/api/v1/workspaces/{first_user_workspace.id}/",
         json=data_for_update,
-        headers=authorize_first_user,
+        headers=authorize_second_user,
     )
 
     assert update_workspace_member_response.status_code == status.HTTP_403_FORBIDDEN
@@ -265,68 +237,54 @@ def test_delete_workspace_removes_memberships_by_cascade(
 def test_admin_cannot_delete_workspace(
     test_session,
     test_db_client,
-    first_user,
-    authorize_first_user,
+    second_user,
+    authorize_second_user,
     first_user_workspace,
+    add_workspace_member
 ):
-    workspace_member_stmt = select(
-        WorkspaceMember,
-    ).where(
-        WorkspaceMember.user_id == first_user.id,
-        WorkspaceMember.workspace_id == first_user_workspace.id,
-    )
-    workspace_member = test_session.execute(
-        workspace_member_stmt,
-    ).scalars().one_or_none()
-
-    assert workspace_member is not None
-
-    workspace_member.role = "admin"
-
-    test_session.commit()
-    test_session.refresh(workspace_member)
-
+    add_workspace_member(first_user_workspace, second_user, "admin")
     delete_admin_response = test_db_client.delete(
         f"/api/v1/workspaces/{first_user_workspace.id}/",
-        headers=authorize_first_user,
+        headers=authorize_second_user,
     )
 
     assert delete_admin_response.status_code == status.HTTP_403_FORBIDDEN
+
+    workspace = test_session.get(
+        Workspace,
+        first_user_workspace.id
+    )
+
+    assert workspace is not None
 
 
 def test_member_cannot_delete_workspace(
     test_session,
     test_db_client,
-    first_user,
-    authorize_first_user,
+    second_user,
+    authorize_second_user,
     first_user_workspace,
+    add_workspace_member
 ):
-    workspace_member_stmt = select(
-        WorkspaceMember,
-    ).where(
-        WorkspaceMember.user_id == first_user.id,
-        WorkspaceMember.workspace_id == first_user_workspace.id,
-    )
-    workspace_member = test_session.execute(
-        workspace_member_stmt,
-    ).scalars().one_or_none()
-
-    assert workspace_member is not None
-
-    workspace_member.role = "member"
-
-    test_session.commit()
-    test_session.refresh(workspace_member)
+    add_workspace_member(first_user_workspace, second_user)
 
     delete_member_response = test_db_client.delete(
         f"/api/v1/workspaces/{first_user_workspace.id}/",
-        headers=authorize_first_user,
+        headers=authorize_second_user,
     )
 
     assert delete_member_response.status_code == status.HTTP_403_FORBIDDEN
 
+    workspace = test_session.get(
+        Workspace,
+        first_user_workspace.id
+    )
+
+    assert workspace is not None
+
 
 def test_non_member_cannot_delete_workspace(
+    test_session,
     test_db_client,
     authorize_second_user,
     first_user_workspace,
@@ -337,4 +295,11 @@ def test_non_member_cannot_delete_workspace(
     )
 
     assert delete_member_response.status_code == status.HTTP_404_NOT_FOUND
+
+    workspace = test_session.get(
+        Workspace,
+        first_user_workspace.id
+    )
+
+    assert workspace is not None
 

@@ -5,6 +5,7 @@ from fastapi import (
     HTTPException,
 )
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -26,13 +27,17 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     status_code=status.HTTP_201_CREATED,
 )
 async def user_register(user_data: UserCreate, session: Session = Depends(get_db)):
-    existing_user_email = session.query(User).filter(User.email == user_data.email).first()
+    existing_user_email = session.scalar(
+        select(User).where(User.email == user_data.email)
+    )
     if existing_user_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Данный email уже занят другим пользователем",
         )
-    existing_user_username = session.query(User).filter(User.username == user_data.username).first()
+    existing_user_username = session.scalar(
+        select(User).where(User.username == user_data.username)
+    )
     if existing_user_username:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -55,16 +60,14 @@ async def user_register(user_data: UserCreate, session: Session = Depends(get_db
     status_code=status.HTTP_200_OK
 )
 async def user_login(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_db)):
-    user_obj = session.query(User).filter(User.username == form_data.username).first()
+    user_obj = session.scalar(
+        select(User).where(User.username == form_data.username)
+    )
 
-    if not user_obj:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверные учётные данные",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if not verify_password(form_data.password, user_obj.hashed_password):
+    if user_obj is None or not verify_password(
+        form_data.password,
+        user_obj.hashed_password,
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Неверные учётные данные",

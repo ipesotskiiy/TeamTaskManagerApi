@@ -3,20 +3,34 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, Integer, String, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import (
+    Enum,
+    ForeignKey,
+    String,
+    func,
+)
+from sqlalchemy.orm import (
+    Mapped,
+    mapped_column,
+    relationship,
+)
 
 from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.workspace import Workspace
+    from app.models.task_comment import TaskComment
+    from app.models.task_activity import TaskActivity
 
 
 class Task(Base):
     __tablename__ = "tasks"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
     workspace_id: Mapped[int] = mapped_column(
         ForeignKey(
             "workspaces.id",
@@ -78,4 +92,16 @@ class Task(Base):
         "User",
         back_populates="assigned_tasks",
         foreign_keys=[assignee_id],
+    )
+    comments: Mapped[list["TaskComment"]] = relationship(
+        "TaskComment",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    activities: Mapped[list["TaskActivity"]] = relationship(
+        "TaskActivity",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
