@@ -426,3 +426,193 @@ def test_get_workspace_members_ordered_by_membership_id(
     ]
 
     assert membership_ids == sorted(membership_ids)
+
+
+def test_owner_can_get_workspace_member(
+    test_session,
+    test_db_client,
+    first_user,
+    second_user,
+    authorize_first_user,
+    first_user_workspace,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+
+    second_user_membership = test_session.scalar(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == first_user_workspace.id,
+            WorkspaceMember.user_id == second_user.id,
+        )
+    )
+
+    assert second_user_membership is not None
+
+    workspace_member_response = test_db_client.get(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{second_user_membership.id}/",
+        headers=authorize_first_user,
+    )
+
+    assert workspace_member_response.status_code == status.HTTP_200_OK
+
+    workspace_member_response_data = workspace_member_response.json()
+
+    assert workspace_member_response_data["id"] == second_user_membership.id
+    assert workspace_member_response_data["workspace_id"] == first_user_workspace.id
+    assert workspace_member_response_data["user_id"] == second_user.id
+    assert workspace_member_response_data["role"] == "member"
+    assert workspace_member_response_data["username"] == second_user.username
+    assert workspace_member_response_data["email"] == second_user.email
+
+
+def test_admin_can_get_workspace_member(
+    test_session,
+    test_db_client,
+    first_user,
+    second_user,
+    authorize_second_user,
+    first_user_workspace,
+    add_workspace_member,
+):
+    add_workspace_member(
+        first_user_workspace,
+        second_user,
+        "admin",
+    )
+
+    owner_membership = test_session.scalar(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == first_user_workspace.id,
+            WorkspaceMember.user_id == first_user.id,
+        )
+    )
+
+    assert owner_membership is not None
+
+    workspace_member_response = test_db_client.get(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/"
+        f"{owner_membership.id}/",
+        headers=authorize_second_user,
+    )
+
+    assert workspace_member_response.status_code == status.HTTP_200_OK
+
+    workspace_member_response_data = workspace_member_response.json()
+
+    assert workspace_member_response_data["id"] == owner_membership.id
+    assert workspace_member_response_data["workspace_id"] == first_user_workspace.id
+    assert workspace_member_response_data["user_id"] == first_user.id
+    assert workspace_member_response_data["username"] == first_user.username
+    assert workspace_member_response_data["email"] == first_user.email
+    assert workspace_member_response_data["role"] == "owner"
+
+
+def test_member_can_get_workspace_member(
+    test_session,
+    test_db_client,
+    first_user,
+    second_user,
+    authorize_second_user,
+    first_user_workspace,
+    add_workspace_member,
+):
+    add_workspace_member(
+        first_user_workspace,
+        second_user,
+        "member",
+    )
+
+    owner_membership = test_session.scalar(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == first_user_workspace.id,
+            WorkspaceMember.user_id == first_user.id,
+        )
+    )
+
+    assert owner_membership is not None
+
+    workspace_member_response = test_db_client.get(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/"
+        f"{owner_membership.id}/",
+        headers=authorize_second_user,
+    )
+
+    assert workspace_member_response.status_code == status.HTTP_200_OK
+
+    workspace_member_response_data = workspace_member_response.json()
+
+    assert workspace_member_response_data["id"] == owner_membership.id
+    assert workspace_member_response_data["workspace_id"] == first_user_workspace.id
+    assert workspace_member_response_data["user_id"] == first_user.id
+    assert workspace_member_response_data["username"] == first_user.username
+    assert workspace_member_response_data["email"] == first_user.email
+    assert workspace_member_response_data["role"] == "owner"
+
+
+def test_get_missing_workspace_member_gets_404(
+    test_db_client,
+    authorize_first_user,
+    first_user_workspace,
+):
+    workspace_member_response = test_db_client.get(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/999999/",
+        headers=authorize_first_user,
+    )
+
+    assert workspace_member_response.status_code == status.HTTP_404_NOT_FOUND
+    assert workspace_member_response.json()["detail"] == "Workspace member not found"
+
+
+def test_get_workspace_member_from_another_workspace_gets_404(
+    test_session,
+    test_db_client,
+    authorize_first_user,
+    first_user_workspace,
+    second_user_workspace,
+    second_user,
+):
+    second_workspace_membership = test_session.scalar(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == second_user_workspace.id,
+            WorkspaceMember.user_id == second_user.id,
+        )
+    )
+
+    assert second_workspace_membership is not None
+
+    workspace_member_response = test_db_client.get(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/"
+        f"{second_workspace_membership.id}/",
+        headers=authorize_first_user,
+    )
+
+    assert workspace_member_response.status_code == status.HTTP_404_NOT_FOUND
+    assert (
+        workspace_member_response.json()["detail"]
+        == "Workspace member not found"
+    )
+
+
+def test_non_member_get_workspace_member_gets_404(
+    test_session,
+    test_db_client,
+    authorize_second_user,
+    first_user_workspace,
+    first_user,
+):
+    owner_membership = test_session.scalar(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == first_user_workspace.id,
+            WorkspaceMember.user_id == first_user.id,
+        )
+    )
+
+    assert owner_membership is not None
+
+    workspace_member_response = test_db_client.get(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{owner_membership.id}/",
+        headers=authorize_second_user,
+    )
+
+    assert workspace_member_response.status_code == status.HTTP_404_NOT_FOUND
+    assert workspace_member_response.json()["detail"] == "Workspace not found"
