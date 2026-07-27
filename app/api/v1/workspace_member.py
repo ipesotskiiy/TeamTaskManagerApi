@@ -1,4 +1,9 @@
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    Query,
+    status,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
