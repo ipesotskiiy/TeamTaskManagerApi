@@ -2,17 +2,29 @@ from fastapi import (
     APIRouter,
     Depends,
     Query,
-    status,
+    status, HTTPException,
 )
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.api.v1.dependencies.workspace_member import get_workspace_member_or_404
-from app.api.v1.dependencies.workspaces import get_workspace_for_member_or_404
+from app.api.v1.dependencies.workspace_member import (
+    get_workspace_member_or_404,
+    get_membership_with_workspace_and_user_ids,
+    get_user_or_404,
+    ensure_role,
+)
+from app.api.v1.dependencies.workspaces import (
+    get_workspace_for_member_or_404,
+    get_workspace_and_membership_or_404,
+)
 from app.db.session import get_db
 from app.models import User, WorkspaceMember
-from app.schemas.workspace_member import WorkspaceMemberRead, WorkspaceMemberRole
+from app.schemas.workspace_member import (
+    WorkspaceMemberRead,
+    WorkspaceMemberRole,
+    WorkspaceMemberCreate,
+)
 
 router = APIRouter(prefix="/members", tags=["workspace-members"])
 
@@ -119,3 +131,56 @@ async def get_workspace_member(
     )
 
 
+@router.post(
+    "/",
+    status_code=status.HTTP_201_CREATED,
+    response_model=WorkspaceMemberRead,
+)
+async def create_workspace_member(
+    workspace_id: int,
+    workspace_member_data: WorkspaceMemberCreate,
+    session: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _, membership = get_workspace_and_membership_or_404(
+        session,
+        workspace_id,
+        current_user.id,
+    )
+    ensure_role(
+        membership.role,
+        workspace_member_data.role,
+    )
+    user=get_user_or_404(
+        session,
+        workspace_member_data.user_id
+    )
+    check_add_user_membership = get_membership_with_workspace_and_user_ids(
+        session,
+        workspace_id,
+        workspace_member_data.user_id,
+    )
+    if check_add_user_membership is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User is already a workspace member",
+        )
+
+    workspace_member = WorkspaceMember(
+        workspace_id=workspace_id,
+        user_id=workspace_member_data.user_id,
+        role=workspace_member_data.role,
+    )
+    session.add(workspace_member)
+    session.commit()
+    session.refresh(workspace_member)
+
+    return WorkspaceMemberRead(
+        id=workspace_member.id,
+        workspace_id=workspace_member.workspace_id,
+        user_id=workspace_member.user_id,
+        username=user.username,
+        email=user.email,
+        role=workspace_member.role,
+        created_at=workspace_member.created_at,
+    )
