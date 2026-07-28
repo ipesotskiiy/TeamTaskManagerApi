@@ -616,3 +616,488 @@ def test_non_member_get_workspace_member_gets_404(
 
     assert workspace_member_response.status_code == status.HTTP_404_NOT_FOUND
     assert workspace_member_response.json()["detail"] == "Workspace not found"
+
+
+def test_owner_can_create_workspace_member_with_default_role(
+    test_session,
+    test_db_client,
+    second_user,
+    first_user_workspace,
+    authorize_first_user,
+):
+    add_member_data = {
+        "user_id": second_user.id
+    }
+    add_member_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/",
+        json=add_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert add_member_response.status_code == status.HTTP_201_CREATED
+
+    add_member_response_data = add_member_response.json()
+
+    assert add_member_response_data["role"] == "member"
+    assert add_member_response_data["workspace_id"] == first_user_workspace.id
+    assert add_member_response_data["user_id"] == second_user.id
+    assert add_member_response_data["username"] == second_user.username
+    assert add_member_response_data["email"] == second_user.email
+    assert "created_at" in add_member_response_data
+    assert "id" in add_member_response_data
+
+    membership = test_session.get(WorkspaceMember, add_member_response_data["id"])
+
+    assert membership is not None
+    assert membership.role == add_member_response_data["role"]
+    assert membership.workspace_id == add_member_response_data["workspace_id"]
+    assert membership.user_id == add_member_response_data["user_id"]
+    assert membership.created_at is not None
+    assert membership.id is not None
+
+
+def test_owner_can_create_workspace_admin(
+    test_session,
+    test_db_client,
+    second_user,
+    first_user_workspace,
+    authorize_first_user,
+):
+    add_member_data = {
+        "user_id": second_user.id,
+        "role": "admin",
+    }
+    add_member_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/",
+        json=add_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert add_member_response.status_code == status.HTTP_201_CREATED
+
+    add_member_response_data = add_member_response.json()
+    assert add_member_response_data["role"] == "admin"
+    assert add_member_response_data["workspace_id"] == first_user_workspace.id
+    assert add_member_response_data["user_id"] == second_user.id
+    assert add_member_response_data["username"] == second_user.username
+    assert add_member_response_data["email"] == second_user.email
+    assert "created_at" in add_member_response_data
+    assert "id" in add_member_response_data
+
+    membership = test_session.get(WorkspaceMember, add_member_response_data["id"])
+    assert membership is not None
+    assert membership.role == add_member_response_data["role"]
+    assert membership.workspace_id == add_member_response_data["workspace_id"]
+    assert membership.user_id == add_member_response_data["user_id"]
+    assert membership.created_at is not None
+    assert membership.id is not None
+
+
+def test_admin_can_create_workspace_member(
+    test_session,
+    test_db_client,
+    second_user,
+    third_user,
+    first_user_workspace,
+    authorize_second_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user, "admin")
+    add_member_data = {
+        "user_id": third_user.id,
+        "role": "member",
+    }
+    add_member_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/",
+        json=add_member_data,
+        headers=authorize_second_user,
+    )
+
+    assert add_member_response.status_code == status.HTTP_201_CREATED
+
+    add_member_response_data = add_member_response.json()
+    assert add_member_response_data["role"] == "member"
+    assert add_member_response_data["workspace_id"] == first_user_workspace.id
+    assert add_member_response_data["user_id"] == third_user.id
+    assert add_member_response_data["username"] == third_user.username
+    assert add_member_response_data["email"] == third_user.email
+    assert "created_at" in add_member_response_data
+    assert "id" in add_member_response_data
+
+    membership = test_session.get(WorkspaceMember, add_member_response_data["id"])
+    assert membership is not None
+    assert membership.role == add_member_response_data["role"]
+    assert membership.workspace_id == add_member_response_data["workspace_id"]
+    assert membership.user_id == add_member_response_data["user_id"]
+    assert membership.created_at is not None
+    assert membership.id is not None
+
+
+def test_admin_cannot_create_workspace_admin(
+    test_session,
+    test_db_client,
+    second_user,
+    third_user,
+    first_user_workspace,
+    authorize_second_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user, "admin")
+    add_member_data = {
+        "user_id": third_user.id,
+        "role": "admin",
+    }
+    add_member_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/",
+        json=add_member_data,
+        headers=authorize_second_user,
+    )
+
+    assert add_member_response.status_code == status.HTTP_403_FORBIDDEN
+    assert add_member_response.json()["detail"] == "Only owner can add workspace admin"
+
+    membership_stmt = select(
+        WorkspaceMember,
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == third_user.id
+    )
+    membership = test_session.scalar(membership_stmt)
+
+    assert membership is None
+
+
+def test_member_cannot_create_workspace_member(
+    test_session,
+    test_db_client,
+    second_user,
+    third_user,
+    first_user_workspace,
+    authorize_second_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+    add_member_data = {
+        "user_id": third_user.id,
+        "role": "member",
+    }
+    add_member_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/",
+        json=add_member_data,
+        headers=authorize_second_user,
+    )
+
+    assert add_member_response.status_code == status.HTTP_403_FORBIDDEN
+    assert add_member_response.json()["detail"] == "You cannot add workspace members"
+
+    membership_stmt = select(
+        WorkspaceMember,
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == third_user.id
+    )
+    membership = test_session.scalar(membership_stmt)
+
+    assert membership is None
+
+
+def test_non_member_create_workspace_member_gets_404(
+    test_session,
+    test_db_client,
+    third_user,
+    first_user_workspace,
+    authorize_second_user,
+):
+    add_member_data = {
+        "user_id": third_user.id,
+        "role": "member",
+    }
+    add_member_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/",
+        json=add_member_data,
+        headers=authorize_second_user,
+    )
+
+    assert add_member_response.status_code == status.HTTP_404_NOT_FOUND
+    assert add_member_response.json()["detail"] == "Workspace not found"
+
+    membership_stmt = select(
+        WorkspaceMember,
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == third_user.id
+    )
+    membership = test_session.scalar(membership_stmt)
+
+    assert membership is None
+
+
+def test_create_workspace_member_with_missing_user_gets_404(
+    test_session,
+    test_db_client,
+    first_user_workspace,
+    authorize_first_user,
+):
+    add_member_data = {
+        "user_id": 999999999999,
+        "role": "member",
+    }
+    membership_stmt = select(
+        WorkspaceMember,
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+    )
+    old_count_membership = len(test_session.scalars(membership_stmt).all())
+
+    add_member_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/",
+        json=add_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert add_member_response.status_code == status.HTTP_404_NOT_FOUND
+    assert add_member_response.json()["detail"] == "User not found"
+
+    membership_stmt = select(
+        WorkspaceMember,
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+    )
+    new_count_membership = len(test_session.scalars(membership_stmt).all())
+
+    assert old_count_membership == new_count_membership
+
+
+def test_create_duplicate_workspace_member_gets_409(
+    test_session,
+    test_db_client,
+    second_user,
+    first_user_workspace,
+    authorize_first_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+    add_member_data = {
+        "user_id": second_user.id,
+        "role": "member",
+    }
+    add_member_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/",
+        json=add_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert add_member_response.status_code == status.HTTP_409_CONFLICT
+    assert add_member_response.json()["detail"] == "User is already a workspace member"
+
+    membership_stmt = select(
+        WorkspaceMember,
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id
+    )
+    membership_count = len(test_session.scalars(membership_stmt).all())
+
+    assert membership_count == 1
+
+
+def test_owner_cannot_add_self_as_workspace_member(
+    test_session,
+    test_db_client,
+    first_user,
+    first_user_workspace,
+    authorize_first_user,
+):
+    add_member_data = {
+        "user_id": first_user.id,
+        "role": "member",
+    }
+    add_member_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/",
+        json=add_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert add_member_response.status_code == status.HTTP_409_CONFLICT
+    assert add_member_response.json()["detail"] == "User is already a workspace member"
+
+    membership_stmt = select(
+        WorkspaceMember,
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == first_user.id
+    )
+    membership_count = len(test_session.scalars(membership_stmt).all())
+
+    assert membership_count == 1
+
+
+def test_create_workspace_member_with_owner_role_gets_422(
+    test_session,
+    test_db_client,
+    second_user,
+    first_user_workspace,
+    authorize_first_user,
+):
+    add_member_data = {
+        "user_id": second_user.id,
+        "role": "owner",
+    }
+    add_member_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/",
+        json=add_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert add_member_response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    membership_stmt = select(
+        WorkspaceMember,
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id
+    )
+    membership = test_session.scalar(membership_stmt)
+
+    assert membership is None
+
+
+def test_create_workspace_member_with_zero_user_id_gets_422(
+    test_session,
+    test_db_client,
+    first_user_workspace,
+    authorize_first_user,
+):
+    add_member_data = {
+        "user_id": 0,
+        "role": "member",
+    }
+    membership_stmt = select(
+        WorkspaceMember,
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+    )
+    old_count_membership = len(test_session.scalars(membership_stmt).all())
+
+    add_member_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/",
+        json=add_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert add_member_response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    membership_stmt = select(
+        WorkspaceMember,
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+    )
+    new_count_membership = len(test_session.scalars(membership_stmt).all())
+
+    assert old_count_membership == new_count_membership
+
+
+def test_create_workspace_member_without_user_id_gets_422(
+    test_session,
+    test_db_client,
+    first_user_workspace,
+    authorize_first_user,
+):
+    add_member_data = {
+        "role": "member",
+    }
+    membership_stmt = select(
+        WorkspaceMember,
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+    )
+    old_count_membership = len(test_session.scalars(membership_stmt).all())
+
+    add_member_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/",
+        json=add_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert add_member_response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    membership_stmt = select(
+        WorkspaceMember,
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+    )
+    new_count_membership = len(test_session.scalars(membership_stmt).all())
+
+    assert old_count_membership == new_count_membership
+
+
+def test_member_adding_missing_user_gets_403_before_user_lookup(
+    test_session,
+    test_db_client,
+    second_user,
+    first_user_workspace,
+    authorize_second_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+    add_member_data = {
+        "user_id": 9999999999,
+        "role": "member",
+    }
+    membership_stmt = select(
+        WorkspaceMember,
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+    )
+    old_count_membership = len(test_session.scalars(membership_stmt).all())
+    add_member_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/",
+        json=add_member_data,
+        headers=authorize_second_user,
+    )
+
+    membership_stmt = select(
+        WorkspaceMember,
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+    )
+    new_count_membership = len(test_session.scalars(membership_stmt).all())
+
+    assert add_member_response.status_code == status.HTTP_403_FORBIDDEN
+    assert add_member_response.json()["detail"] == "You cannot add workspace members"
+    assert old_count_membership == new_count_membership
+
+
+def test_non_member_adding_missing_user_gets_workspace_404(
+    test_session,
+    test_db_client,
+    first_user_workspace,
+    authorize_second_user,
+):
+    add_member_data = {
+        "user_id": 9999999999,
+        "role": "member",
+    }
+    membership_stmt = select(
+        WorkspaceMember,
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+    )
+    old_count_membership = len(test_session.scalars(membership_stmt).all())
+
+    add_member_response = test_db_client.post(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/",
+        json=add_member_data,
+        headers=authorize_second_user,
+    )
+
+    membership_stmt = select(
+        WorkspaceMember,
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+    )
+    new_count_membership = len(test_session.scalars(membership_stmt).all())
+
+    assert add_member_response.status_code == status.HTTP_404_NOT_FOUND
+    assert add_member_response.json()["detail"] == "Workspace not found"
+    assert old_count_membership == new_count_membership
