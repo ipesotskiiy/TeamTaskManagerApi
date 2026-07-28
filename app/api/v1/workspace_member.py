@@ -13,6 +13,8 @@ from app.api.v1.dependencies.workspace_member import (
     get_membership_with_workspace_and_user_ids,
     get_user_or_404,
     ensure_role,
+    check_is_owner,
+    check_correct_role,
 )
 from app.api.v1.dependencies.workspaces import (
     get_workspace_for_member_or_404,
@@ -24,6 +26,7 @@ from app.schemas.workspace_member import (
     WorkspaceMemberRead,
     WorkspaceMemberRole,
     WorkspaceMemberCreate,
+    WorkspaceMemberUpdate,
 )
 
 router = APIRouter(prefix="/members", tags=["workspace-members"])
@@ -183,4 +186,48 @@ async def create_workspace_member(
         email=user.email,
         role=workspace_member.role,
         created_at=workspace_member.created_at,
+    )
+
+
+@router.patch(
+    "/{membership_id}/",
+    status_code=status.HTTP_200_OK,
+    response_model=WorkspaceMemberRead,
+)
+async def update_workspace_member_role(
+    workspace_id: int,
+    membership_id: int,
+    change_workspace_data: WorkspaceMemberUpdate,
+    session: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace, membership = get_workspace_and_membership_or_404(
+        session,
+        workspace_id,
+        current_user.id,
+    )
+    check_is_owner(membership.role)
+    changing_membership, user = get_workspace_member_or_404(
+        session,
+        workspace_id=workspace.id,
+        membership_id=membership_id,
+    )
+
+    check_correct_role(changing_membership.role)
+
+    update_data = change_workspace_data.model_dump(exclude_unset=True)
+    for field_name, field_value in update_data.items():
+        setattr(changing_membership, field_name, field_value)
+
+    session.commit()
+    session.refresh(changing_membership)
+
+    return WorkspaceMemberRead(
+        id=changing_membership.id,
+        workspace_id=changing_membership.workspace_id,
+        user_id=changing_membership.user_id,
+        username=user.username,
+        email=user.email,
+        role=changing_membership.role,
+        created_at=changing_membership.created_at,
     )

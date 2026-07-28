@@ -81,3 +81,22 @@ def ensure_role(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only owner can add workspace admin"
         )
+
+def check_is_owner(
+    membership_role: str
+) -> None:
+    if membership_role != "owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only owner can change workspace member roles",
+        )
+
+def check_correct_role(
+    changing_membership_role: str,
+) -> None:
+
+    if changing_membership_role == "owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Workspace owner role cannot be changed",
+        )
