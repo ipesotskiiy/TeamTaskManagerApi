@@ -2,7 +2,8 @@ from fastapi import (
     APIRouter,
     Depends,
     Query,
-    status, HTTPException,
+    status,
+    HTTPException,
 )
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,13 +16,14 @@ from app.api.v1.dependencies.workspace_member import (
     ensure_role,
     check_is_owner,
     check_correct_role,
+    check_permission_for_delete,
 )
 from app.api.v1.dependencies.workspaces import (
     get_workspace_for_member_or_404,
     get_workspace_and_membership_or_404,
 )
 from app.db.session import get_db
-from app.models import User, WorkspaceMember
+from app.models import User, WorkspaceMember, Task
 from app.schemas.workspace_member import (
     WorkspaceMemberRead,
     WorkspaceMemberRole,
@@ -231,3 +233,47 @@ async def update_workspace_member_role(
         role=changing_membership.role,
         created_at=changing_membership.created_at,
     )
+
+@router.delete(
+    "/{membership_id}/",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_workspace_member(
+    workspace_id: int,
+    membership_id: int,
+    session: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace, membership = get_workspace_and_membership_or_404(
+        session,
+        workspace_id,
+        current_user.id,
+    )
+
+    current_user_role = membership.role
+
+    deleting_membership, user = get_workspace_member_or_404(
+        session,
+        workspace_id=workspace.id,
+        membership_id=membership_id,
+    )
+
+    check_permission_for_delete(
+        current_user_role,
+        deleting_membership.role
+    )
+
+    tasks_stmt = select(
+        Task,
+    ).where(
+        Task.workspace_id == workspace_id,
+        Task.assignee_id == user.id
+    )
+
+    tasks = session.scalars(tasks_stmt).all()
+
+    for task in tasks:
+        task.assignee_id = None
+
+    session.delete(deleting_membership)
+    session.commit()

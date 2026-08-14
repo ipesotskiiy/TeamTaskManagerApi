@@ -100,3 +100,25 @@ def check_correct_role(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Workspace owner role cannot be changed",
         )
+
+def check_permission_for_delete(
+    current_user_role: str,
+    deleting_membership_role: str,
+) -> None:
+    if current_user_role == "member":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Member cannot remove anyone from workspace"
+        )
+
+    if current_user_role == "admin" and deleting_membership_role != "member":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin can remove only member"
+        )
+
+    if deleting_membership_role == "owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Workspace owner cannot be removed",
+        )
