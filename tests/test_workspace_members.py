@@ -1101,3 +1101,657 @@ def test_non_member_adding_missing_user_gets_workspace_404(
     assert add_member_response.status_code == status.HTTP_404_NOT_FOUND
     assert add_member_response.json()["detail"] == "Workspace not found"
     assert old_count_membership == new_count_membership
+
+
+def test_owner_can_promote_workspace_member_to_admin(
+    test_session,
+    test_db_client,
+    first_user,
+    second_user,
+    first_user_workspace,
+    authorize_first_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+
+    update_member_data = {
+        "role": "admin",
+    }
+
+    update_member_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        json=update_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert update_member_response.status_code == status.HTTP_200_OK
+
+    workspace_membership_data = update_member_response.json()
+
+    assert workspace_membership_data["user_id"] == second_user.id
+    assert workspace_membership_data["username"] == second_user.username
+    assert workspace_membership_data["email"] == second_user.email
+    assert workspace_membership_data["role"] == "admin"
+
+    new_workspace_membership = test_session.get(WorkspaceMember, workspace_membership_data["id"])
+
+    assert new_workspace_membership is not None
+    assert new_workspace_membership.user_id == second_user.id
+    assert new_workspace_membership.role == "admin"
+
+
+def test_owner_can_demote_workspace_admin_to_member(
+    test_session,
+    test_db_client,
+    first_user,
+    second_user,
+    first_user_workspace,
+    authorize_first_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user, "admin")
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+
+    update_member_data = {
+        "role": "member",
+    }
+
+    update_member_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        json=update_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert update_member_response.status_code == status.HTTP_200_OK
+
+    workspace_membership_data = update_member_response.json()
+
+    assert workspace_membership_data["user_id"] == second_user.id
+    assert workspace_membership_data["username"] == second_user.username
+    assert workspace_membership_data["email"] == second_user.email
+    assert workspace_membership_data["role"] == "member"
+
+    new_workspace_membership = test_session.get(WorkspaceMember, workspace_membership_data["id"])
+
+    assert new_workspace_membership is not None
+    assert new_workspace_membership.user_id == second_user.id
+    assert new_workspace_membership.role == "member"
+
+
+def test_owner_can_update_workspace_member_with_same_role(
+    test_session,
+    test_db_client,
+    first_user,
+    second_user,
+    first_user_workspace,
+    authorize_first_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+
+    update_member_data = {
+        "role": "member",
+    }
+
+    update_member_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        json=update_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert update_member_response.status_code == status.HTTP_200_OK
+
+    workspace_membership_data = update_member_response.json()
+
+    assert workspace_membership_data["user_id"] == second_user.id
+    assert workspace_membership_data["username"] == second_user.username
+    assert workspace_membership_data["email"] == second_user.email
+    assert workspace_membership_data["role"] == "member"
+
+    new_workspace_membership = test_session.get(WorkspaceMember, workspace_membership_data["id"])
+
+    assert new_workspace_membership is not None
+    assert new_workspace_membership.user_id == second_user.id
+    assert new_workspace_membership.role == "member"
+
+    assert workspace_member.id == new_workspace_membership.id
+
+
+def test_admin_cannot_update_workspace_member_role(
+    test_session,
+    test_db_client,
+    third_user,
+    second_user,
+    first_user_workspace,
+    authorize_second_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user, "admin")
+    add_workspace_member(first_user_workspace, third_user)
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == third_user.id,
+    )
+
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+
+    update_member_data = {
+        "role": "admin",
+    }
+
+    update_member_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        json=update_member_data,
+        headers=authorize_second_user,
+    )
+
+    assert update_member_response.status_code == status.HTTP_403_FORBIDDEN
+    assert update_member_response.json()["detail"] == "Only owner can change workspace member roles"
+
+    membership_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == third_user.id
+    )
+
+    membership = test_session.scalar(membership_stmt)
+
+    assert membership is not None
+    assert membership.role == "member"
+
+
+def test_member_cannot_update_workspace_member_role(
+    test_session,
+    test_db_client,
+    third_user,
+    second_user,
+    first_user_workspace,
+    authorize_second_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+    add_workspace_member(first_user_workspace, third_user)
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == third_user.id,
+    )
+
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+
+    update_member_data = {
+        "role": "admin",
+    }
+
+    update_member_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        json=update_member_data,
+        headers=authorize_second_user,
+    )
+
+    assert update_member_response.status_code == status.HTTP_403_FORBIDDEN
+    assert update_member_response.json()["detail"] == "Only owner can change workspace member roles"
+
+    membership_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == third_user.id
+    )
+
+    membership = test_session.scalar(membership_stmt)
+
+    assert membership is not None
+    assert membership.role == "member"
+
+
+def test_non_member_cannot_update_workspace_member_role(
+    test_session,
+    test_db_client,
+    first_user,
+    second_user,
+    first_user_workspace,
+    authorize_second_user,
+):
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == first_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+
+    update_member_data = {
+        "role": "admin",
+    }
+    update_member_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        json=update_member_data,
+        headers=authorize_second_user,
+    )
+
+    assert update_member_response.status_code == status.HTTP_404_NOT_FOUND
+    assert update_member_response.json()["detail"] == "Workspace not found"
+
+    workspace_membership_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == first_user.id
+    )
+
+    membership = test_session.scalar(workspace_membership_stmt)
+
+    assert membership is not None
+    assert membership.role == "owner"
+
+
+def test_unauthenticated_user_cannot_update_workspace_member_role(
+    test_session,
+    test_db_client,
+    first_user,
+    first_user_workspace,
+):
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == first_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+
+    update_member_data = {
+        "role": "admin",
+    }
+    update_member_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        json=update_member_data,
+    )
+
+    assert update_member_response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    workspace_membership_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == first_user.id
+    )
+
+    membership = test_session.scalar(workspace_membership_stmt)
+
+    assert membership is not None
+    assert membership.role == "owner"
+
+
+def test_owner_cannot_update_member_from_another_workspace(
+    test_session,
+    test_db_client,
+    third_user,
+    first_user_workspace,
+    second_user_workspace,
+    authorize_first_user,
+    add_workspace_member,
+):
+    add_workspace_member(second_user_workspace, third_user)
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == second_user_workspace.id,
+        WorkspaceMember.user_id == third_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+
+    update_member_data = {
+        "role": "admin",
+    }
+    update_member_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        json=update_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert update_member_response.status_code == status.HTTP_404_NOT_FOUND
+    assert update_member_response.json()["detail"] == "Workspace member not found"
+
+    workspace_membership_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == second_user_workspace.id,
+        WorkspaceMember.user_id == third_user.id
+    )
+
+    membership = test_session.scalar(workspace_membership_stmt)
+
+    assert membership is not None
+    assert membership.role == "member"
+
+
+def test_update_workspace_member_returns_404_for_missing_membership(
+    test_session,
+    test_db_client,
+    second_user,
+    first_user_workspace,
+    authorize_first_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+    update_member_data = {
+        "role": "admin",
+    }
+    update_member_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/9999/",
+        json=update_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert update_member_response.status_code == status.HTTP_404_NOT_FOUND
+    assert update_member_response.json()["detail"] == "Workspace member not found"
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+
+def test_update_workspace_member_returns_404_for_missing_workspace(
+    test_session,
+    test_db_client,
+    second_user,
+    first_user_workspace,
+    authorize_first_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+    update_member_data = {
+        "role": "admin",
+    }
+    update_member_response = test_db_client.patch(
+        f"/api/v1/workspaces/9999/members/{workspace_member.id}/",
+        json=update_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert update_member_response.status_code == status.HTTP_404_NOT_FOUND
+    assert update_member_response.json()["detail"] == "Workspace not found"
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+
+def test_owner_cannot_change_workspace_owner_role(
+    test_session,
+    test_db_client,
+    first_user,
+    first_user_workspace,
+    authorize_first_user,
+):
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == first_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+    assert workspace_member.role == "owner"
+
+    update_member_data = {
+        "role": "admin",
+    }
+    update_member_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        json=update_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert update_member_response.status_code == status.HTTP_403_FORBIDDEN
+    assert update_member_response.json()["detail"] == "Workspace owner role cannot be changed"
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == first_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+    assert workspace_member.role == "owner"
+
+
+def test_workspace_member_role_cannot_be_changed_to_owner(
+    test_session,
+    test_db_client,
+    second_user,
+    first_user_workspace,
+    authorize_first_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+    update_member_data = {
+        "role": "owner",
+    }
+    update_member_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        json=update_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert update_member_response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+
+def test_update_workspace_member_rejects_invalid_role(
+    test_session,
+    test_db_client,
+    second_user,
+    first_user_workspace,
+    authorize_first_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+    update_member_data = {
+        "role": "owner_t",
+    }
+    update_member_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        json=update_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert update_member_response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+
+def test_update_workspace_member_rejects_empty_body(
+    test_session,
+    test_db_client,
+    second_user,
+    first_user_workspace,
+    authorize_first_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+    update_member_data = {}
+    update_member_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        json=update_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert update_member_response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+
+def test_update_workspace_member_rejects_null_role(
+    test_session,
+    test_db_client,
+    second_user,
+    first_user_workspace,
+    authorize_first_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+    update_member_data = {
+        "role": None,
+    }
+    update_member_response = test_db_client.patch(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        json=update_member_data,
+        headers=authorize_first_user,
+    )
+
+    assert update_member_response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
