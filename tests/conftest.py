@@ -89,6 +89,21 @@ def second_user(test_db_client, test_session):
 
 
 @pytest.fixture
+def third_user(test_db_client, test_session):
+    user_data = {
+        "email": "third_user@example.com",
+        "username": "third_igor",
+        "hashed_password": get_password_hash("hard_password"),
+    }
+
+    user = User(**user_data)
+    test_session.add(user)
+    test_session.commit()
+    test_session.refresh(user)
+    return user
+
+
+@pytest.fixture
 def authorize_first_user(test_db_client, first_user) -> dict[str, str]:
     login_response = test_db_client.post(
         "/api/v1/auth/login/",
