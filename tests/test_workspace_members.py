@@ -1,7 +1,7 @@
 from fastapi import status
 from sqlalchemy import select
 
-from app.models import WorkspaceMember
+from app.models import WorkspaceMember, Task
 
 
 def test_owner_can_get_workspace_members(
@@ -1755,3 +1755,523 @@ def test_update_workspace_member_rejects_null_role(
     workspace_member = test_session.scalar(workspace_member_stmt)
     assert workspace_member is not None
     assert workspace_member.role == "member"
+
+
+def test_owner_can_delete_workspace_member(
+    test_session,
+    test_db_client,
+    authorize_first_user,
+    first_user_workspace,
+    second_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+    delete_member_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        headers=authorize_first_user,
+    )
+
+    assert delete_member_response.status_code == status.HTTP_204_NO_CONTENT
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is None
+
+
+def test_owner_can_delete_workspace_admin(
+    test_session,
+    test_db_client,
+    authorize_first_user,
+    first_user_workspace,
+    second_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user, "admin")
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "admin"
+
+    delete_member_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        headers=authorize_first_user,
+    )
+
+    assert delete_member_response.status_code == status.HTTP_204_NO_CONTENT
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is None
+
+
+def test_admin_can_delete_workspace_member(
+    test_session,
+    test_db_client,
+    authorize_second_user,
+    first_user_workspace,
+    second_user,
+    third_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user, "admin")
+    add_workspace_member(first_user_workspace, third_user)
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == third_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+    delete_member_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        headers=authorize_second_user,
+    )
+
+    assert delete_member_response.status_code == status.HTTP_204_NO_CONTENT
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == third_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is None
+
+
+def test_admin_cannot_delete_workspace_admin(
+    test_session,
+    test_db_client,
+    authorize_second_user,
+    first_user_workspace,
+    second_user,
+    third_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user, "admin")
+    add_workspace_member(first_user_workspace, third_user, "admin")
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == third_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "admin"
+
+    delete_member_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        headers=authorize_second_user,
+    )
+
+    assert delete_member_response.status_code == status.HTTP_403_FORBIDDEN
+    assert delete_member_response.json()["detail"] == "Admin can remove only member"
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == third_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "admin"
+
+
+def test_admin_cannot_delete_workspace_owner(
+    test_session,
+    test_db_client,
+    authorize_second_user,
+    first_user_workspace,
+    second_user,
+    first_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user, "admin")
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == first_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "owner"
+
+    delete_member_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        headers=authorize_second_user,
+    )
+
+    assert delete_member_response.status_code == status.HTTP_403_FORBIDDEN
+    assert delete_member_response.json()["detail"] == "Admin can remove only member"
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == first_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "owner"
+
+
+def test_member_cannot_delete_workspace_member(
+    test_session,
+    test_db_client,
+    authorize_second_user,
+    first_user_workspace,
+    second_user,
+    third_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+    add_workspace_member(first_user_workspace, third_user)
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == third_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+    delete_member_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        headers=authorize_second_user,
+    )
+
+    assert delete_member_response.status_code == status.HTTP_403_FORBIDDEN
+    assert delete_member_response.json()["detail"] == "Member cannot remove anyone from workspace"
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == third_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+
+def test_owner_cannot_delete_workspace_owner(
+    test_session,
+    test_db_client,
+    authorize_first_user,
+    first_user_workspace,
+    first_user
+):
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == first_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "owner"
+
+    delete_member_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        headers=authorize_first_user,
+    )
+
+    assert delete_member_response.status_code == status.HTTP_403_FORBIDDEN
+    assert delete_member_response.json()["detail"] == "Workspace owner cannot be removed"
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == first_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "owner"
+
+
+def test_non_member_cannot_delete_workspace_member(
+    test_session,
+    test_db_client,
+    authorize_second_user,
+    first_user_workspace,
+    second_user,
+    first_user,
+    add_workspace_member,
+):
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == first_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "owner"
+
+    delete_member_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        headers=authorize_second_user,
+    )
+
+    assert delete_member_response.status_code == status.HTTP_404_NOT_FOUND
+    assert delete_member_response.json()["detail"] == "Workspace not found"
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == first_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "owner"
+
+
+def test_unauthenticated_user_cannot_delete_workspace_member(
+    test_session,
+    test_db_client,
+    first_user_workspace,
+    second_user,
+    first_user,
+    add_workspace_member,
+):
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == first_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "owner"
+
+    delete_member_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+    )
+
+    assert delete_member_response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == first_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "owner"
+
+
+def test_delete_workspace_member_returns_404_for_missing_membership(
+    test_session,
+    test_db_client,
+    authorize_first_user,
+    first_user_workspace,
+    add_workspace_member,
+):
+    delete_member_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/99999/",
+        headers=authorize_first_user,
+    )
+
+    assert delete_member_response.status_code == status.HTTP_404_NOT_FOUND
+    assert delete_member_response.json()["detail"] == "Workspace member not found"
+
+
+def test_delete_workspace_member_returns_404_for_missing_workspace(
+    test_session,
+    test_db_client,
+    authorize_first_user,
+    first_user_workspace,
+    second_user,
+    add_workspace_member,
+):
+    add_workspace_member(first_user_workspace, second_user)
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+    delete_member_response = test_db_client.delete(
+        f"/api/v1/workspaces/999999/members/{workspace_member.id}/",
+        headers=authorize_first_user,
+    )
+
+    assert delete_member_response.status_code == status.HTTP_404_NOT_FOUND
+    assert delete_member_response.json()["detail"] == "Workspace not found"
+
+
+def test_owner_cannot_delete_member_from_another_workspace(
+    test_session,
+    test_db_client,
+    authorize_first_user,
+    first_user_workspace,
+    second_user_workspace,
+    second_user,
+    add_workspace_member,
+):
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == second_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+
+    delete_member_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        headers=authorize_first_user,
+    )
+
+    assert delete_member_response.status_code == status.HTTP_404_NOT_FOUND
+    assert delete_member_response.json()["detail"] == "Workspace member not found"
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == second_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+
+
+def test_deleting_workspace_member_unassigns_member_from_workspace_tasks(
+    test_session,
+    test_db_client,
+    second_user,
+    first_user_workspace,
+    add_workspace_member,
+    authorize_first_user,
+    first_user_workspace_first_task,
+    first_user_workspace_second_task,
+):
+    add_workspace_member(first_user_workspace, second_user)
+
+    first_user_workspace_first_task.assignee_id = second_user.id
+    first_user_workspace_second_task.assignee_id = second_user.id
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+    delete_member_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        headers=authorize_first_user,
+    )
+
+    assert delete_member_response.status_code == status.HTTP_204_NO_CONTENT
+
+    first_task = test_session.get(Task, first_user_workspace_first_task.id)
+    second_task = test_session.get(Task, first_user_workspace_second_task.id)
+
+    assert first_task.assignee_id is None
+    assert second_task.assignee_id is None
+
+
+def test_deleting_workspace_member_does_not_unassign_tasks_from_another_workspace(
+    test_session,
+    test_db_client,
+    second_user,
+    first_user_workspace,
+    second_user_workspace,
+    add_workspace_member,
+    authorize_first_user,
+    first_user_workspace_first_task,
+    second_user_workspace_first_task,
+):
+    add_workspace_member(first_user_workspace, second_user)
+
+    first_user_workspace_first_task.assignee_id = second_user.id
+    second_user_workspace_first_task.assignee_id = second_user.id
+
+    workspace_member_stmt = select(
+        WorkspaceMember
+    ).where(
+        WorkspaceMember.workspace_id == first_user_workspace.id,
+        WorkspaceMember.user_id == second_user.id,
+    )
+    workspace_member = test_session.scalar(workspace_member_stmt)
+
+    assert workspace_member is not None
+    assert workspace_member.role == "member"
+
+    delete_member_response = test_db_client.delete(
+        f"/api/v1/workspaces/{first_user_workspace.id}/members/{workspace_member.id}/",
+        headers=authorize_first_user,
+    )
+
+    assert delete_member_response.status_code == status.HTTP_204_NO_CONTENT
+
+    first_task = test_session.get(Task, first_user_workspace_first_task.id)
+    second_task = test_session.get(Task, second_user_workspace_first_task.id)
+
+    assert first_task.assignee_id is None
+    assert second_task.assignee_id == second_user.id
