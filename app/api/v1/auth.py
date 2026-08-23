@@ -78,7 +78,7 @@ def user_login(form_data: OAuth2PasswordRequestForm = Depends(), session: Sessio
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверные учётные данные",
+            detail="Incorrect credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -86,7 +86,7 @@ def user_login(form_data: OAuth2PasswordRequestForm = Depends(), session: Sessio
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@router.get("/me", response_model=UserRead)
+@router.get("/me/", response_model=UserRead)
 def get_me(user: User = Depends(get_current_user)):
     return user
 

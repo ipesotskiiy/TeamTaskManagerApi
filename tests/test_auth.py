@@ -41,8 +41,8 @@ def test_register_duplicate_email(test_db_client, first_user):
         json=second_user_data,
     )
 
-    assert register_response.status_code == status.HTTP_400_BAD_REQUEST
-    assert register_response.json()["detail"] == "Данный email уже занят другим пользователем"
+    assert register_response.status_code == status.HTTP_409_CONFLICT
+    assert register_response.json()["detail"] == "Email is already registered"
 
 
 def test_register_duplicate_username(test_db_client, first_user):
@@ -56,8 +56,8 @@ def test_register_duplicate_username(test_db_client, first_user):
         json=second_user_data,
     )
 
-    assert register_response.status_code == status.HTTP_400_BAD_REQUEST
-    assert register_response.json()["detail"] == "Данный username уже занят другим пользователем"
+    assert register_response.status_code == status.HTTP_409_CONFLICT
+    assert register_response.json()["detail"] == "Username is already registered"
 
 
 def test_login_success(test_db_client, first_user):
@@ -111,7 +111,7 @@ def test_get_me_success(test_db_client, first_user):
     token = login_response.json()["access_token"]
 
     me_response = test_db_client.get(
-        "/api/v1/auth/me",
+        "/api/v1/auth/me/",
         headers={"Authorization": f"Bearer {token}"},
     )
     me_response_data = me_response.json()
@@ -130,14 +130,14 @@ def test_get_me_success(test_db_client, first_user):
 
 
 def test_get_me_without_token(test_db_client):
-    me_response = test_db_client.get("/api/v1/auth/me")
+    me_response = test_db_client.get("/api/v1/auth/me/")
 
     assert me_response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 def test_get_me_invalid_token(test_db_client):
     me_response = test_db_client.get(
-        "/api/v1/auth/me",
+        "/api/v1/auth/me/",
         headers={"Authorization": "Bearer invalid-token"},
     )
 

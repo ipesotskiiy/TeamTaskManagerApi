@@ -22,7 +22,7 @@ def get_current_user(
 ) -> User:
     invalid_token_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Недействительный токен",
+        detail="Invalid token",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
@@ -48,7 +48,7 @@ def get_current_user(
     if user is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Пользователь не найден",
+            detail="User not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
