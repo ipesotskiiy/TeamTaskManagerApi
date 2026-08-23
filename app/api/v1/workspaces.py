@@ -33,7 +33,7 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"])
     response_model=WorkspaceRead,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_workspace(
+def create_workspace(
     workspace_data: WorkspaceCreate,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_db),
@@ -65,7 +65,7 @@ async def create_workspace(
     response_model=list[WorkspaceRead],
     status_code=status.HTTP_200_OK,
 )
-async def get_workspaces(
+def get_workspaces(
     session: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -88,7 +88,7 @@ async def get_workspaces(
     "/{workspace_id}/",
     response_model=WorkspaceRead,
 )
-async def get_workspace(
+def get_workspace(
     workspace_id: int,
     session: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -105,7 +105,7 @@ async def get_workspace(
     "/{workspace_id}/",
     response_model=WorkspaceRead,
 )
-async def update_workspace(
+def update_workspace(
     workspace_id: int,
     workspace_data: WorkspaceUpdate,
     session: Session = Depends(get_db),
@@ -138,7 +138,7 @@ async def update_workspace(
     "/{workspace_id}/",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def delete_workspace(
+def delete_workspace(
     workspace_id: int,
     session: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

@@ -26,7 +26,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     response_model=UserRead,
     status_code=status.HTTP_201_CREATED,
 )
-async def user_register(user_data: UserCreate, session: Session = Depends(get_db)):
+def user_register(user_data: UserCreate, session: Session = Depends(get_db)):
     existing_user_email = session.scalar(
         select(User).where(User.email == user_data.email)
     )
@@ -59,7 +59,7 @@ async def user_register(user_data: UserCreate, session: Session = Depends(get_db
     response_model=Token,
     status_code=status.HTTP_200_OK
 )
-async def user_login(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_db)):
+def user_login(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_db)):
     user_obj = session.scalar(
         select(User).where(User.username == form_data.username)
     )
@@ -79,6 +79,6 @@ async def user_login(form_data: OAuth2PasswordRequestForm = Depends(), session: 
 
 
 @router.get("/me", response_model=UserRead)
-async def get_me(user: User = Depends(get_current_user)):
+def get_me(user: User = Depends(get_current_user)):
     return user
 

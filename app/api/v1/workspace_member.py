@@ -39,7 +39,7 @@ router = APIRouter(prefix="/members", tags=["workspace-members"])
     status_code=status.HTTP_200_OK,
     response_model=list[WorkspaceMemberRead],
 )
-async def get_workspace_members(
+def get_workspace_members(
     workspace_id: int,
     session: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -107,7 +107,7 @@ async def get_workspace_members(
     status_code=status.HTTP_200_OK,
     response_model=WorkspaceMemberRead,
 )
-async def get_workspace_member(
+def get_workspace_member(
     workspace_id: int,
     membership_id: int,
     session: Session = Depends(get_db),
@@ -141,7 +141,7 @@ async def get_workspace_member(
     status_code=status.HTTP_201_CREATED,
     response_model=WorkspaceMemberRead,
 )
-async def create_workspace_member(
+def create_workspace_member(
     workspace_id: int,
     workspace_member_data: WorkspaceMemberCreate,
     session: Session = Depends(get_db),
@@ -196,7 +196,7 @@ async def create_workspace_member(
     status_code=status.HTTP_200_OK,
     response_model=WorkspaceMemberRead,
 )
-async def update_workspace_member_role(
+def update_workspace_member_role(
     workspace_id: int,
     membership_id: int,
     change_workspace_data: WorkspaceMemberUpdate,
@@ -238,7 +238,7 @@ async def update_workspace_member_role(
     "/{membership_id}/",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def delete_workspace_member(
+def delete_workspace_member(
     workspace_id: int,
     membership_id: int,
     session: Session = Depends(get_db),

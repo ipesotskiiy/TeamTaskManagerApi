@@ -16,7 +16,7 @@ oauth2_scheme = OAuth2PasswordBearer(
 )
 
 
-async def get_current_user(
+def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     session: Session = Depends(get_db),
 ) -> User:
