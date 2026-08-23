@@ -6,6 +6,7 @@ from fastapi import (
     HTTPException,
 )
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -177,7 +178,14 @@ def create_workspace_member(
         role=workspace_member_data.role,
     )
     session.add(workspace_member)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User is already a workspace member"
+        )
     session.refresh(workspace_member)
 
     return WorkspaceMemberRead(

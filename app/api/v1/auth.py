@@ -6,6 +6,7 @@ from fastapi import (
 )
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -32,16 +33,16 @@ def user_register(user_data: UserCreate, session: Session = Depends(get_db)):
     )
     if existing_user_email:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Данный email уже занят другим пользователем",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email is already registered",
         )
     existing_user_username = session.scalar(
         select(User).where(User.username == user_data.username)
     )
     if existing_user_username:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Данный username уже занят другим пользователем",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username is already registered",
         )
 
     hashed_password = get_password_hash(user_data.password)
@@ -49,7 +50,14 @@ def user_register(user_data: UserCreate, session: Session = Depends(get_db)):
     user = User(email=user_data.email, username=user_data.username, hashed_password=hashed_password)
 
     session.add(user)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User with this email or username already exists"
+        )
     session.refresh(user)
 
     return user
