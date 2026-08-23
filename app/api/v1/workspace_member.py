@@ -18,6 +18,7 @@ from app.api.v1.dependencies.workspace_member import (
     check_is_owner,
     check_correct_role,
     check_permission_for_delete,
+    create_workspace_member_read,
 )
 from app.api.v1.dependencies.workspaces import (
     get_workspace_for_member_or_404,
@@ -126,16 +127,7 @@ def get_workspace_member(
         membership_id,
     )
 
-    return WorkspaceMemberRead(
-        id=membership.id,
-        workspace_id=membership.workspace_id,
-        user_id=membership.user_id,
-        username=user.username,
-        email=user.email,
-        role=membership.role,
-        created_at=membership.created_at,
-    )
-
+    return create_workspace_member_read(membership, user)
 
 @router.post(
     "/",
@@ -188,15 +180,7 @@ def create_workspace_member(
         )
     session.refresh(workspace_member)
 
-    return WorkspaceMemberRead(
-        id=workspace_member.id,
-        workspace_id=workspace_member.workspace_id,
-        user_id=workspace_member.user_id,
-        username=user.username,
-        email=user.email,
-        role=workspace_member.role,
-        created_at=workspace_member.created_at,
-    )
+    return create_workspace_member_read(workspace_member, user)
 
 
 @router.patch(
@@ -232,15 +216,7 @@ def update_workspace_member_role(
     session.commit()
     session.refresh(changing_membership)
 
-    return WorkspaceMemberRead(
-        id=changing_membership.id,
-        workspace_id=changing_membership.workspace_id,
-        user_id=changing_membership.user_id,
-        username=user.username,
-        email=user.email,
-        role=changing_membership.role,
-        created_at=changing_membership.created_at,
-    )
+    return create_workspace_member_read(changing_membership, user)
 
 @router.delete(
     "/{membership_id}/",

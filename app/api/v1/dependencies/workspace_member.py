@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
 from app.models import WorkspaceMember, User
+from app.schemas.workspace_member import WorkspaceMemberRead
 
 
 def get_workspace_member_or_404(
@@ -122,3 +123,18 @@ def check_permission_for_delete(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Workspace owner cannot be removed",
         )
+
+
+def create_workspace_member_read(
+    membership: WorkspaceMember,
+    user: User,
+) -> WorkspaceMemberRead:
+    return WorkspaceMemberRead(
+        id=membership.id,
+        workspace_id=membership.workspace_id,
+        user_id=membership.user_id,
+        username=user.username,
+        email=user.email,
+        role=membership.role,
+        created_at=membership.created_at,
+    )
