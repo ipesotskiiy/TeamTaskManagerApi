@@ -125,8 +125,8 @@ def update_workspace(
 
     update_data = get_workspace_update_data(workspace_data)
 
-    for key, value in update_data.items():
-        setattr(workspace, key, value)
+    for field_name, field_value in update_data.items():
+        setattr(workspace, field_name, field_value)
 
     session.commit()
     session.refresh(workspace)

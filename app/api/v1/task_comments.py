@@ -94,7 +94,7 @@ def create_task_comment(
     status_code=status.HTTP_200_OK,
     response_model=list[TaskCommentRead],
 )
-def get_list_task_comments(
+def get_task_comments(
     workspace_id: int,
     task_id: int,
     session: Session = Depends(get_db),
@@ -202,17 +202,17 @@ def update_task_comment(
 
     update_task_comment_data_dict = update_task_comment_data.model_dump(exclude_unset=True)
 
-    for key, value in update_task_comment_data_dict.items():
-        if key == "text":
+    for field_name, field_value in update_task_comment_data_dict.items():
+        if field_name == "text":
             create_comment_updated_activity(
                 session=session,
                 old_task_comment_text=task_comment.text,
-                new_task_comment_text=value,
+                new_task_comment_text=field_value,
                 workspace_id=workspace_id,
                 task_id=task_id,
                 current_user_id=current_user.id
             )
-        setattr(task_comment, key, value)
+        setattr(task_comment, field_name, field_value)
 
     session.commit()
     session.refresh(task_comment)

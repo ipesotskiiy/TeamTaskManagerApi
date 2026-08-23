@@ -186,17 +186,17 @@ def update_task(
             new_assignee_id,
         )
 
-    for key, value in task_data_dict.items():
-        if key in TASK_UPDATE_EVENT_BY_FIELD:
+    for field_name, field_value in task_data_dict.items():
+        if field_name in TASK_UPDATE_EVENT_BY_FIELD:
             create_task_update_activity(
                 session,
-                key,
-                value,
+                field_name,
+                field_value,
                 current_user.id,
                 workspace_id,
                 task,
             )
-        setattr(task, key, value)
+        setattr(task, field_name, field_value)
 
     session.commit()
     session.refresh(task)

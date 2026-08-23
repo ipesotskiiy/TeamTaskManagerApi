@@ -149,16 +149,16 @@ def create_workspace_member(
         membership.role,
         workspace_member_data.role,
     )
-    user=get_user_or_404(
+    user = get_user_or_404(
         session,
         workspace_member_data.user_id
     )
-    check_add_user_membership = get_membership_with_workspace_and_user_ids(
+    existing_membership = get_membership_with_workspace_and_user_ids(
         session,
         workspace_id,
         workspace_member_data.user_id,
     )
-    if check_add_user_membership is not None:
+    if existing_membership is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="User is already a workspace member",
