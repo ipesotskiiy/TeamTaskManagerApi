@@ -5,7 +5,7 @@ from fastapi import (
     status,
     HTTPException,
 )
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -271,17 +271,15 @@ def delete_workspace_member(
         deleting_membership.role
     )
 
-    tasks_stmt = select(
-        Task,
+    unassign_tasks_stmt = update(
+        Task
     ).where(
         Task.workspace_id == workspace_id,
         Task.assignee_id == user.id
+    ).values(
+        assignee_id=None
     )
-
-    tasks = session.scalars(tasks_stmt).all()
-
-    for task in tasks:
-        task.assignee_id = None
+    session.execute(unassign_tasks_stmt)
 
     session.delete(deleting_membership)
     session.commit()
