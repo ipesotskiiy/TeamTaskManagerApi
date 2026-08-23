@@ -2,6 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.v1.dependencies.workspace_member import get_workspace_membership
 from app.models import Task, WorkspaceMember
 from app.schemas.task import TaskUpdate
 
@@ -31,14 +32,11 @@ def validate_assignee_or_400(
     workspace_id: int,
     assignee_user_id: int,
 ) -> None:
-    assignee_stmt = select(
-        WorkspaceMember,
-    ).where(
-        WorkspaceMember.workspace_id == workspace_id,
-        WorkspaceMember.user_id == assignee_user_id,
+    assignee_membership = get_workspace_membership(
+        session,
+        workspace_id,
+        assignee_user_id,
     )
-
-    assignee_membership = session.scalar(assignee_stmt)
 
     if assignee_membership is None:
         raise HTTPException(

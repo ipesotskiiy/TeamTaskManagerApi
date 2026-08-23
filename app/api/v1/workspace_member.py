@@ -12,12 +12,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.api.v1.dependencies.workspace_member import (
     get_workspace_member_or_404,
-    get_membership_with_workspace_and_user_ids,
+    get_workspace_membership,
     get_user_or_404,
-    ensure_role,
+    ensure_can_add_workspace_member_with_role_or_403,
     check_is_owner,
-    check_correct_role,
-    check_permission_for_delete,
+    check_changing_role_is_not_owner,
+    ensure_can_delete_workspace_member_or_403,
     create_workspace_member_read,
 )
 from app.api.v1.dependencies.workspaces import (
@@ -145,7 +145,7 @@ def create_workspace_member(
         workspace_id,
         current_user.id,
     )
-    ensure_role(
+    ensure_can_add_workspace_member_with_role_or_403(
         membership.role,
         workspace_member_data.role,
     )
@@ -153,7 +153,7 @@ def create_workspace_member(
         session,
         workspace_member_data.user_id
     )
-    existing_membership = get_membership_with_workspace_and_user_ids(
+    existing_membership = get_workspace_membership(
         session,
         workspace_id,
         workspace_member_data.user_id,
@@ -207,7 +207,7 @@ def update_workspace_member_role(
         membership_id=membership_id,
     )
 
-    check_correct_role(changing_membership.role)
+    check_changing_role_is_not_owner(changing_membership.role)
 
     update_data = change_workspace_data.model_dump(exclude_unset=True)
     for field_name, field_value in update_data.items():
@@ -242,7 +242,7 @@ def delete_workspace_member(
         membership_id=membership_id,
     )
 
-    check_permission_for_delete(
+    ensure_can_delete_workspace_member_or_403(
         current_user_role,
         deleting_membership.role
     )

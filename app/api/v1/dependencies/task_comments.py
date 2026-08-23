@@ -37,12 +37,12 @@ def ensure_comment_action_allowed_or_403(
     current_user_id: int,
     action: ActionType,
 ) -> None:
-    is_can_change_or_delete_task_comment = (
+    is_change_or_delete_comment_allowed = (
             membership_role in ("admin", "owner")
             or task_comment_author_id == current_user_id
     )
 
-    if not is_can_change_or_delete_task_comment:
+    if not is_change_or_delete_comment_allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"You can't {action} this task comment"
@@ -55,13 +55,13 @@ def ensure_can_comment_task_or_403(
     task_assignee_id: int | None,
     current_user_id: int,
 ) -> None:
-    is_can_comment = (
+    is_comment_allowed = (
             membership_role in ("owner", "admin")
             or task_created_by_id == current_user_id
             or task_assignee_id == current_user_id
     )
 
-    if not is_can_comment:
+    if not is_comment_allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can't comment this task",
