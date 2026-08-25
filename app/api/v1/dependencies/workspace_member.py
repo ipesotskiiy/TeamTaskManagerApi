@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
 from app.models import WorkspaceMember, User
+from app.schemas.workspace_member import WorkspaceMemberRead
 
 
 def get_workspace_member_or_404(
@@ -37,21 +38,21 @@ def get_workspace_member_or_404(
     return workspace_member, user
 
 
-def get_membership_with_workspace_and_user_ids(
+def get_workspace_membership(
     session: Session,
     workspace_id: int,
     user_id: int,
 ) -> WorkspaceMember | None:
-    check_add_user_membership_stmt = select(
+    membership_stmt = select(
         WorkspaceMember,
     ).where(
         WorkspaceMember.workspace_id == workspace_id,
         WorkspaceMember.user_id == user_id
     )
 
-    check_add_user_membership = session.scalar(check_add_user_membership_stmt)
+    membership = session.scalar(membership_stmt)
 
-    return check_add_user_membership
+    return membership
 
 
 def get_user_or_404(
@@ -67,7 +68,7 @@ def get_user_or_404(
     return user
 
 
-def ensure_role(
+def ensure_can_add_workspace_member_with_role_or_403(
     membership_role: str,
     workspace_member_data_role: str,
 ) -> None:
@@ -91,7 +92,7 @@ def check_is_owner(
             detail="Only owner can change workspace member roles",
         )
 
-def check_correct_role(
+def check_changing_role_is_not_owner(
     changing_membership_role: str,
 ) -> None:
 
@@ -101,7 +102,7 @@ def check_correct_role(
             detail="Workspace owner role cannot be changed",
         )
 
-def check_permission_for_delete(
+def ensure_can_delete_workspace_member_or_403(
     current_user_role: str,
     deleting_membership_role: str,
 ) -> None:
@@ -122,3 +123,18 @@ def check_permission_for_delete(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Workspace owner cannot be removed",
         )
+
+
+def create_workspace_member_read(
+    membership: WorkspaceMember,
+    user: User,
+) -> WorkspaceMemberRead:
+    return WorkspaceMemberRead(
+        id=membership.id,
+        workspace_id=membership.workspace_id,
+        user_id=membership.user_id,
+        username=user.username,
+        email=user.email,
+        role=membership.role,
+        created_at=membership.created_at,
+    )

@@ -13,7 +13,7 @@ from app.constants.task_activity import (
 from app.models import Task, TaskActivity
 
 
-async def create_task_update_activity(
+def create_task_update_activity(
     session: Session,
     key: str,
     value: str | int | date | datetime | Enum | None,
@@ -24,8 +24,8 @@ async def create_task_update_activity(
     event_type = TASK_UPDATE_EVENT_BY_FIELD[key]
     old_value = inspect(task).attrs[key].value
 
-    prepared_old_value = await prepare_activity_value(old_value)
-    prepared_new_value = await prepare_activity_value(value)
+    prepared_old_value = prepare_activity_value(old_value)
+    prepared_new_value = prepare_activity_value(value)
 
     if prepared_old_value == prepared_new_value:
         return
@@ -42,7 +42,7 @@ async def create_task_update_activity(
     session.add(task_activity)
 
 
-async def prepare_activity_value(value: object) -> str | None:
+def prepare_activity_value(value: object) -> str | None:
     if value is None:
         return None
 
@@ -55,7 +55,7 @@ async def prepare_activity_value(value: object) -> str | None:
     return str(value)
 
 
-async def create_task_comment_activity(
+def create_task_comment_activity(
     session: Session,
     task_comment: str,
     workspace_id: int,
@@ -74,7 +74,7 @@ async def create_task_comment_activity(
     session.add(task_activity)
 
 
-async def create_comment_updated_activity(
+def create_comment_updated_activity(
     session: Session,
     old_task_comment_text: str,
     new_task_comment_text: str,
@@ -95,7 +95,7 @@ async def create_comment_updated_activity(
         session.add(task_activity)
 
 
-async def create_comment_deleted_activity(
+def create_comment_deleted_activity(
     session: Session,
     old_task_comment_text: str,
     workspace_id: int,

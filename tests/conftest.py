@@ -62,7 +62,7 @@ def test_db_client(test_session):
 def first_user(test_db_client, test_session):
     user_data = {
         "email": "first_user@example.com",
-        "username": "igor",
+        "username": "igorosha",
         "hashed_password": get_password_hash("hard_password"),
     }
 

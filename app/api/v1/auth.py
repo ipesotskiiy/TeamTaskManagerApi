@@ -6,6 +6,7 @@ from fastapi import (
 )
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -26,22 +27,22 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     response_model=UserRead,
     status_code=status.HTTP_201_CREATED,
 )
-async def user_register(user_data: UserCreate, session: Session = Depends(get_db)):
+def user_register(user_data: UserCreate, session: Session = Depends(get_db)):
     existing_user_email = session.scalar(
         select(User).where(User.email == user_data.email)
     )
     if existing_user_email:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Данный email уже занят другим пользователем",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email is already registered",
         )
     existing_user_username = session.scalar(
         select(User).where(User.username == user_data.username)
     )
     if existing_user_username:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Данный username уже занят другим пользователем",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username is already registered",
         )
 
     hashed_password = get_password_hash(user_data.password)
@@ -49,7 +50,14 @@ async def user_register(user_data: UserCreate, session: Session = Depends(get_db
     user = User(email=user_data.email, username=user_data.username, hashed_password=hashed_password)
 
     session.add(user)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User with this email or username already exists"
+        )
     session.refresh(user)
 
     return user
@@ -59,7 +67,7 @@ async def user_register(user_data: UserCreate, session: Session = Depends(get_db
     response_model=Token,
     status_code=status.HTTP_200_OK
 )
-async def user_login(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_db)):
+def user_login(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_db)):
     user_obj = session.scalar(
         select(User).where(User.username == form_data.username)
     )
@@ -70,7 +78,7 @@ async def user_login(form_data: OAuth2PasswordRequestForm = Depends(), session: 
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверные учётные данные",
+            detail="Incorrect credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -78,7 +86,7 @@ async def user_login(form_data: OAuth2PasswordRequestForm = Depends(), session: 
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@router.get("/me", response_model=UserRead)
-async def get_me(user: User = Depends(get_current_user)):
+@router.get("/me/", response_model=UserRead)
+def get_me(user: User = Depends(get_current_user)):
     return user
 

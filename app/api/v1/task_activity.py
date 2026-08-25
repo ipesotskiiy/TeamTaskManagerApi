@@ -21,7 +21,7 @@ router = APIRouter(prefix="/activities", tags=["activities"])
     status_code=status.HTTP_200_OK,
     response_model=list[TaskActivityRead],
 )
-async def get_task_activities(
+def get_task_activities(
     workspace_id: int,
     task_id: int,
     session: Session = Depends(get_db),

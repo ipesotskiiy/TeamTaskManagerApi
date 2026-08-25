@@ -6,8 +6,8 @@ from app.models import User
 def test_register_success(test_db_client, test_session):
     raw_password = "strong-password"
     user_data = {
-        "email": "user@example.com",
-        "username": "john",
+        "email": "user@yandex.ru",
+        "username": "johnny",
         "password": raw_password,
     }
 
@@ -41,14 +41,14 @@ def test_register_duplicate_email(test_db_client, first_user):
         json=second_user_data,
     )
 
-    assert register_response.status_code == status.HTTP_400_BAD_REQUEST
-    assert register_response.json()["detail"] == "Данный email уже занят другим пользователем"
+    assert register_response.status_code == status.HTTP_409_CONFLICT
+    assert register_response.json()["detail"] == "Email is already registered"
 
 
 def test_register_duplicate_username(test_db_client, first_user):
     second_user_data = {
         "email": "second_user@example.com",
-        "username": "igor",
+        "username": "igorosha",
         "password": "raw_password",
     }
     register_response = test_db_client.post(
@@ -56,8 +56,8 @@ def test_register_duplicate_username(test_db_client, first_user):
         json=second_user_data,
     )
 
-    assert register_response.status_code == status.HTTP_400_BAD_REQUEST
-    assert register_response.json()["detail"] == "Данный username уже занят другим пользователем"
+    assert register_response.status_code == status.HTTP_409_CONFLICT
+    assert register_response.json()["detail"] == "Username is already registered"
 
 
 def test_login_success(test_db_client, first_user):
@@ -111,7 +111,7 @@ def test_get_me_success(test_db_client, first_user):
     token = login_response.json()["access_token"]
 
     me_response = test_db_client.get(
-        "/api/v1/auth/me",
+        "/api/v1/auth/me/",
         headers={"Authorization": f"Bearer {token}"},
     )
     me_response_data = me_response.json()
@@ -130,15 +130,68 @@ def test_get_me_success(test_db_client, first_user):
 
 
 def test_get_me_without_token(test_db_client):
-    me_response = test_db_client.get("/api/v1/auth/me")
+    me_response = test_db_client.get("/api/v1/auth/me/")
 
     assert me_response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 def test_get_me_invalid_token(test_db_client):
     me_response = test_db_client.get(
-        "/api/v1/auth/me",
+        "/api/v1/auth/me/",
         headers={"Authorization": "Bearer invalid-token"},
     )
 
     assert me_response.status_code == status.HTTP_401_UNAUTHORIZED
+
+def test_register_rejects_invalid_email(
+        test_db_client,
+):
+    raw_password = "strong-password"
+    user_data = {
+        "email": "abc",
+        "username": "johnny",
+        "password": raw_password,
+    }
+
+    register_response = test_db_client.post(
+        "/api/v1/auth/register/",
+        json=user_data,
+    )
+
+    assert register_response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+def test_register_rejects_short_username(
+        test_db_client,
+):
+    raw_password = "strong-password"
+    user_data = {
+        "email": "user@yandex.ru",
+        "username": "john",
+        "password": raw_password,
+    }
+
+    register_response = test_db_client.post(
+        "/api/v1/auth/register/",
+        json=user_data,
+    )
+
+    assert register_response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+def test_register_rejects_short_password(
+        test_db_client,
+):
+    raw_password = "strong-pa"
+    user_data = {
+        "email": "user@yandex.ru",
+        "username": "johnny",
+        "password": raw_password,
+    }
+
+    register_response = test_db_client.post(
+        "/api/v1/auth/register/",
+        json=user_data,
+    )
+
+    assert register_response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT

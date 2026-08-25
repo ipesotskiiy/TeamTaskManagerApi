@@ -41,7 +41,7 @@ router = APIRouter(prefix="/comments", tags=["comments"])
     status_code=status.HTTP_201_CREATED,
     response_model=TaskCommentRead,
 )
-async def create_task_comment(
+def create_task_comment(
     workspace_id: int,
     task_id: int,
     task_comment_data: TaskCommentCreate,
@@ -67,7 +67,7 @@ async def create_task_comment(
         current_user.id
     )
 
-    await create_task_comment_activity(
+    create_task_comment_activity(
         session=session,
         task_comment=task_comment_data.text,
         workspace_id=workspace_id,
@@ -94,7 +94,7 @@ async def create_task_comment(
     status_code=status.HTTP_200_OK,
     response_model=list[TaskCommentRead],
 )
-async def get_list_task_comments(
+def get_task_comments(
     workspace_id: int,
     task_id: int,
     session: Session = Depends(get_db),
@@ -136,7 +136,7 @@ async def get_list_task_comments(
     status_code=status.HTTP_200_OK,
     response_model=TaskCommentRead,
 )
-async def get_task_comment(
+def get_task_comment(
     workspace_id: int,
     task_id: int,
     comment_id: int,
@@ -166,7 +166,7 @@ async def get_task_comment(
     status_code=status.HTTP_200_OK,
     response_model=TaskCommentRead,
 )
-async def update_task_comment(
+def update_task_comment(
     workspace_id: int,
     task_id: int,
     comment_id: int,
@@ -202,17 +202,17 @@ async def update_task_comment(
 
     update_task_comment_data_dict = update_task_comment_data.model_dump(exclude_unset=True)
 
-    for key, value in update_task_comment_data_dict.items():
-        if key == "text":
-            await create_comment_updated_activity(
+    for field_name, field_value in update_task_comment_data_dict.items():
+        if field_name == "text":
+            create_comment_updated_activity(
                 session=session,
                 old_task_comment_text=task_comment.text,
-                new_task_comment_text=value,
+                new_task_comment_text=field_value,
                 workspace_id=workspace_id,
                 task_id=task_id,
                 current_user_id=current_user.id
             )
-        setattr(task_comment, key, value)
+        setattr(task_comment, field_name, field_value)
 
     session.commit()
     session.refresh(task_comment)
@@ -224,7 +224,7 @@ async def update_task_comment(
     "/{comment_id}/",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def delete_task_comment(
+def delete_task_comment(
     workspace_id: int,
     task_id: int,
     comment_id: int,
@@ -253,7 +253,7 @@ async def delete_task_comment(
         "delete",
     )
 
-    await create_comment_deleted_activity(
+    create_comment_deleted_activity(
         session=session,
         old_task_comment_text=task_comment.text,
         workspace_id=workspace_id,

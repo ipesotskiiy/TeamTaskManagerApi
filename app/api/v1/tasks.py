@@ -43,7 +43,7 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
     response_model=TaskRead,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_task(
+def create_task(
     workspace_id: int,
     task_data: TaskCreate,
     session: Session = Depends(get_db),
@@ -81,7 +81,7 @@ async def create_task(
     response_model=list[TaskRead],
     status_code=status.HTTP_200_OK,
 )
-async def get_tasks(
+def get_tasks(
     workspace_id: int,
     session: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -123,7 +123,7 @@ async def get_tasks(
     response_model=TaskRead,
     status_code=status.HTTP_200_OK,
 )
-async def get_task(
+def get_task(
     workspace_id: int,
     task_id: int,
     session: Session = Depends(get_db),
@@ -149,7 +149,7 @@ async def get_task(
     response_model=TaskRead,
     status_code=status.HTTP_200_OK,
 )
-async def update_task(
+def update_task(
     workspace_id: int,
     task_id: int,
     task_data: TaskUpdate,
@@ -186,17 +186,17 @@ async def update_task(
             new_assignee_id,
         )
 
-    for key, value in task_data_dict.items():
-        if key in TASK_UPDATE_EVENT_BY_FIELD:
-            await create_task_update_activity(
+    for field_name, field_value in task_data_dict.items():
+        if field_name in TASK_UPDATE_EVENT_BY_FIELD:
+            create_task_update_activity(
                 session,
-                key,
-                value,
+                field_name,
+                field_value,
                 current_user.id,
                 workspace_id,
                 task,
             )
-        setattr(task, key, value)
+        setattr(task, field_name, field_value)
 
     session.commit()
     session.refresh(task)
@@ -208,7 +208,7 @@ async def update_task(
     "/{task_id}/",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def delete_task(
+def delete_task(
     workspace_id: int,
     task_id: int,
     session: Session = Depends(get_db),

@@ -5,18 +5,20 @@ from fastapi import (
     status,
     HTTPException,
 )
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.api.v1.dependencies.workspace_member import (
     get_workspace_member_or_404,
-    get_membership_with_workspace_and_user_ids,
+    get_workspace_membership,
     get_user_or_404,
-    ensure_role,
+    ensure_can_add_workspace_member_with_role_or_403,
     check_is_owner,
-    check_correct_role,
-    check_permission_for_delete,
+    check_changing_role_is_not_owner,
+    ensure_can_delete_workspace_member_or_403,
+    create_workspace_member_read,
 )
 from app.api.v1.dependencies.workspaces import (
     get_workspace_for_member_or_404,
@@ -39,7 +41,7 @@ router = APIRouter(prefix="/members", tags=["workspace-members"])
     status_code=status.HTTP_200_OK,
     response_model=list[WorkspaceMemberRead],
 )
-async def get_workspace_members(
+def get_workspace_members(
     workspace_id: int,
     session: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -107,7 +109,7 @@ async def get_workspace_members(
     status_code=status.HTTP_200_OK,
     response_model=WorkspaceMemberRead,
 )
-async def get_workspace_member(
+def get_workspace_member(
     workspace_id: int,
     membership_id: int,
     session: Session = Depends(get_db),
@@ -125,23 +127,14 @@ async def get_workspace_member(
         membership_id,
     )
 
-    return WorkspaceMemberRead(
-        id=membership.id,
-        workspace_id=membership.workspace_id,
-        user_id=membership.user_id,
-        username=user.username,
-        email=user.email,
-        role=membership.role,
-        created_at=membership.created_at,
-    )
-
+    return create_workspace_member_read(membership, user)
 
 @router.post(
     "/",
     status_code=status.HTTP_201_CREATED,
     response_model=WorkspaceMemberRead,
 )
-async def create_workspace_member(
+def create_workspace_member(
     workspace_id: int,
     workspace_member_data: WorkspaceMemberCreate,
     session: Session = Depends(get_db),
@@ -152,20 +145,20 @@ async def create_workspace_member(
         workspace_id,
         current_user.id,
     )
-    ensure_role(
+    ensure_can_add_workspace_member_with_role_or_403(
         membership.role,
         workspace_member_data.role,
     )
-    user=get_user_or_404(
+    user = get_user_or_404(
         session,
         workspace_member_data.user_id
     )
-    check_add_user_membership = get_membership_with_workspace_and_user_ids(
+    existing_membership = get_workspace_membership(
         session,
         workspace_id,
         workspace_member_data.user_id,
     )
-    if check_add_user_membership is not None:
+    if existing_membership is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="User is already a workspace member",
@@ -177,18 +170,17 @@ async def create_workspace_member(
         role=workspace_member_data.role,
     )
     session.add(workspace_member)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User is already a workspace member"
+        )
     session.refresh(workspace_member)
 
-    return WorkspaceMemberRead(
-        id=workspace_member.id,
-        workspace_id=workspace_member.workspace_id,
-        user_id=workspace_member.user_id,
-        username=user.username,
-        email=user.email,
-        role=workspace_member.role,
-        created_at=workspace_member.created_at,
-    )
+    return create_workspace_member_read(workspace_member, user)
 
 
 @router.patch(
@@ -196,7 +188,7 @@ async def create_workspace_member(
     status_code=status.HTTP_200_OK,
     response_model=WorkspaceMemberRead,
 )
-async def update_workspace_member_role(
+def update_workspace_member_role(
     workspace_id: int,
     membership_id: int,
     change_workspace_data: WorkspaceMemberUpdate,
@@ -215,7 +207,7 @@ async def update_workspace_member_role(
         membership_id=membership_id,
     )
 
-    check_correct_role(changing_membership.role)
+    check_changing_role_is_not_owner(changing_membership.role)
 
     update_data = change_workspace_data.model_dump(exclude_unset=True)
     for field_name, field_value in update_data.items():
@@ -224,21 +216,13 @@ async def update_workspace_member_role(
     session.commit()
     session.refresh(changing_membership)
 
-    return WorkspaceMemberRead(
-        id=changing_membership.id,
-        workspace_id=changing_membership.workspace_id,
-        user_id=changing_membership.user_id,
-        username=user.username,
-        email=user.email,
-        role=changing_membership.role,
-        created_at=changing_membership.created_at,
-    )
+    return create_workspace_member_read(changing_membership, user)
 
 @router.delete(
     "/{membership_id}/",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def delete_workspace_member(
+def delete_workspace_member(
     workspace_id: int,
     membership_id: int,
     session: Session = Depends(get_db),
@@ -258,22 +242,20 @@ async def delete_workspace_member(
         membership_id=membership_id,
     )
 
-    check_permission_for_delete(
+    ensure_can_delete_workspace_member_or_403(
         current_user_role,
         deleting_membership.role
     )
 
-    tasks_stmt = select(
-        Task,
+    unassign_tasks_stmt = update(
+        Task
     ).where(
         Task.workspace_id == workspace_id,
         Task.assignee_id == user.id
+    ).values(
+        assignee_id=None
     )
-
-    tasks = session.scalars(tasks_stmt).all()
-
-    for task in tasks:
-        task.assignee_id = None
+    session.execute(unassign_tasks_stmt)
 
     session.delete(deleting_membership)
     session.commit()
